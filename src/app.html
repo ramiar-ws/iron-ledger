@@ -1732,6 +1732,8 @@ function viewPlan(){
       SEED.ARCH.length + ' of those were imported from your written log ' +
       '(1 Mar 2024 – 15 Sep 2026) and ship inside the app, so they cannot be lost. ' +
       'Sessions you log from here on sync to your account.</div>' +
+      '<div class="faint mono" style="font-size:11px;margin-bottom:10px">Build ' +
+        (typeof BUILD_STAMP === 'string' ? BUILD_STAMP : 'dev') + '</div>' +
       '<div class="row" style="gap:8px">' +
         '<button class="btn btn-ghost btn-sm" data-act="export" style="flex:1">Export JSON</button>' +
         '<button class="btn btn-ghost btn-sm" data-act="import" style="flex:1">Import</button></div>' +

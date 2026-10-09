@@ -50,9 +50,19 @@ if('serviceWorker' in navigator){
 </html>
 """
 
+import datetime, subprocess
+try:
+    sha = subprocess.run(['git','rev-parse','--short','HEAD'], cwd=root,
+                         capture_output=True, text=True).stdout.strip() or 'dev'
+except Exception:
+    sha = 'dev'
+stamp = datetime.datetime.now().strftime('%d %b %H:%M') + ' \u00b7 ' + sha
+body_bits = body_bits.replace('<script>\n"use strict";',
+                              '<script>\n"use strict";\nconst BUILD_STAMP = "%s";' % stamp, 1)
+
 out = HEAD + head_bits + "\n</head>\n<body>\n" + body_bits + FOOT
 (root / 'index.html').write_text(out)
-print('index.html:', len(out), 'bytes')
+print('index.html:', len(out), 'bytes  build', stamp)
 
 # sanity: the page must carry the archive and must not double-register meta
 assert 'SEED' in out and 'ARCH' in out, 'archive missing from build'
