@@ -1,0 +1,2216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#0A0A0B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Iron Ledger">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Block-periodised workout logger.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>html{background:#0A0A0B}body{margin:0}img{max-width:100%}
+[hidden]{display:none!important}</style>
+<title>Iron Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* ============================================================
+   TOKENS — light is the base; dark redefines tokens only.
+   Neutrals carry a slight cyan bias toward the accent.
+   ============================================================ */
+:root{
+  /* Committed dark world. A gym app under bad lighting has one job:
+     make the number you need the brightest thing on the glass. */
+  --bg:#0A0A0B;
+  --surface:#141416;
+  --surface-2:#1C1C20;
+  --surface-3:#2A2A30;
+  --line:#2F2F37;
+  --line-soft:#1F1F25;
+
+  --text:#F7F7F3;
+  --text-dim:#9B9BA3;
+  --text-faint:#67676F;
+
+  /* yellow = signal, progress, "you hit it" */
+  --accent:#FFE23D;
+  --accent-ink:#0A0A0B;
+  --accent-soft:#2B2708;
+
+  /* pink = attention, hold, back off */
+  --pink:#FF4F93;
+  --pink-ink:#0A0A0B;
+  --pink-soft:#300F1D;
+
+  --hit:#FFE23D;
+  --hit-soft:#2B2708;
+  --warn:#FF4F93;
+  --warn-soft:#300F1D;
+  --miss:#FF4F93;
+  --miss-soft:#300F1D;
+
+  --ph-strength:#FFE23D;
+  --ph-hyper:#FF4F93;
+  --ph-deload:#F7F7F3;
+
+  --shadow:0 1px 2px rgba(0,0,0,.55), 0 6px 18px rgba(0,0,0,.4);
+  --shadow-lift:0 2px 8px rgba(0,0,0,.6), 0 16px 40px rgba(0,0,0,.5);
+
+  --r-s:8px; --r-m:12px; --r-l:18px;
+  --nav-h:62px;
+
+  --f-display:"Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--f-display);
+  font-size:15px;
+  line-height:1.45;
+  margin:0;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+
+/* ============================================================
+   SHELL
+   ============================================================ */
+#app{
+  max-width:560px;
+  margin:0 auto;
+  min-height:100vh;
+  background:var(--bg);
+  position:relative;
+}
+#view{
+  padding:0 14px calc(var(--nav-h) + env(safe-area-inset-bottom, 0px) + 26px);
+}
+body.in-session #view{ padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 20px); }
+.topbar{
+  display:flex;align-items:flex-end;justify-content:space-between;gap:12px;
+  padding:calc(env(safe-area-inset-top, 0px) + 18px) 0 14px;
+}
+.topbar h1{
+  font-size:26px;font-weight:900;letter-spacing:-.025em;margin:0;line-height:1;
+}
+.eyebrow{
+  font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text-faint);margin:0 0 5px;
+}
+
+/* bottom nav */
+#tabs{
+  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  display:grid;grid-template-columns:repeat(4,1fr);
+  height:calc(var(--nav-h) + env(safe-area-inset-bottom, 0px));
+  padding-bottom:env(safe-area-inset-bottom, 0px);
+  background:color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+}
+#tabs > div{max-width:560px;margin:0 auto;width:100%;display:contents}
+.tab{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  color:var(--text-faint);font-size:10px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;padding-top:6px;transition:color .15s;
+}
+.tab svg{width:21px;height:21px;stroke-width:1.9}
+.tab[aria-current="true"]{color:var(--accent)}
+
+/* ============================================================
+   PRIMITIVES
+   ============================================================ */
+.card{
+  background:var(--surface);
+  border:1px solid var(--line-soft);
+  border-radius:var(--r-l);
+  padding:16px;
+}
+.card + .card{margin-top:12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:10px}
+.spread{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.dim{color:var(--text-dim)}
+.faint{color:var(--text-faint)}
+.sec-title{
+  font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--text-faint);margin:22px 0 9px;
+}
+.sec-title:first-child{margin-top:4px}
+
+.pill{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;
+  padding:4px 9px;border-radius:999px;white-space:nowrap;
+}
+.pill-strength{background:var(--accent-soft);color:var(--accent)}
+.pill-hypertrophy{background:var(--pink-soft);color:var(--pink)}
+.pill-deload{background:var(--surface-3);color:var(--text)}
+.pill-hit{background:var(--hit-soft);color:var(--hit)}
+.pill-miss{background:var(--miss-soft);color:var(--miss)}
+.pill-flat{background:var(--surface-2);color:var(--text-dim)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  background:var(--surface-2);color:var(--text);
+  border-radius:var(--r-m);padding:12px 16px;
+  font-weight:700;font-size:14px;letter-spacing:-.01em;
+  border:1px solid transparent;transition:transform .08s;
+}
+.btn:active{transform:scale(.975)}
+.btn-primary{background:var(--accent);color:var(--accent-ink)}
+.btn-lg{width:100%;padding:16px;font-size:16px;border-radius:14px}
+.btn-ghost{background:transparent;border:1px solid var(--line)}
+.btn-sm{padding:8px 12px;font-size:12.5px;border-radius:9px}
+.btn-danger{background:var(--miss-soft);color:var(--miss)}
+
+.chipbar{display:flex;gap:7px;overflow-x:auto;padding:2px 14px 10px;margin:0 -14px;scrollbar-width:none}
+.chipbar::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;padding:7px 13px;border-radius:999px;
+  background:var(--surface-2);color:var(--text-dim);
+  font-size:12.5px;font-weight:700;white-space:nowrap;border:1px solid transparent;
+}
+.chip[aria-pressed="true"]{background:var(--text);color:var(--bg)}
+
+.empty{
+  text-align:center;padding:38px 20px;color:var(--text-faint);
+  border:1px dashed var(--line);border-radius:var(--r-l);font-size:13.5px;
+}
+
+/* ============================================================
+   TODAY
+   ============================================================ */
+.meso-strip{display:flex;gap:3px;margin-top:12px}
+.meso-week{
+  flex:1;height:26px;border-radius:5px;background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--f-mono);font-size:10px;font-weight:600;color:var(--text-faint);
+  position:relative;overflow:hidden;
+}
+.meso-week[data-p="strength"]{background:var(--accent-soft);color:var(--accent)}
+.meso-week[data-p="hypertrophy"]{background:var(--pink-soft);color:var(--pink)}
+.meso-week[data-p="deload"]{background:var(--surface-3);color:var(--text-dim)}
+.meso-week[data-now="1"]{outline:2px solid var(--text);outline-offset:-2px;font-weight:600;color:var(--text)}
+
+.today-hero{
+  background:var(--surface);border:1px solid var(--line-soft);
+  border-radius:var(--r-l);padding:18px;box-shadow:var(--shadow);
+}
+.today-hero h2{font-size:32px;font-weight:900;letter-spacing:-.035em;margin:6px 0 2px;line-height:1.02}
+.today-focus{font-size:13.5px;color:var(--text-dim);margin:0}
+
+.plan-list{display:flex;flex-direction:column;gap:1px;margin-top:16px;
+  border-radius:var(--r-m);overflow:hidden;border:1px solid var(--line-soft)}
+.plan-row{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+  padding:11px 13px;background:var(--surface-2);
+}
+.plan-row .nm{font-weight:600;font-size:14px;letter-spacing:-.01em}
+.plan-row .sub{font-size:11.5px;color:var(--text-faint);margin-top:1px}
+.plan-rx{text-align:right;font-family:var(--f-mono);font-size:13px;font-weight:600;white-space:nowrap}
+.plan-rx .w{font-size:15px}
+.plan-rx .r{color:var(--text-dim);font-size:11.5px;display:block;margin-top:1px}
+
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.stat{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-m);padding:12px 11px}
+.stat .k{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint)}
+.stat .v{font-family:var(--f-mono);font-size:21px;font-weight:600;letter-spacing:-.02em;margin-top:4px;line-height:1}
+.stat .u{font-size:11px;font-weight:500;color:var(--text-faint);margin-left:2px}
+
+/* ============================================================
+   SESSION LOGGER
+   ============================================================ */
+.sess-head{
+  position:sticky;top:0;z-index:20;margin:0 -14px;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px 10px;
+  background:color-mix(in srgb,var(--bg) 93%, transparent);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--line-soft);
+}
+.sess-head .t{font-size:19px;font-weight:800;letter-spacing:-.02em}
+.timer-bar{
+  display:flex;align-items:center;gap:12px;margin-top:9px;
+  background:var(--surface-2);border-radius:13px;padding:9px 12px;
+  transition:background .2s, padding .2s;
+}
+.timer-bar.live{background:var(--accent);padding:13px 14px}
+.timer-lbl{
+  font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--text-faint);flex:0 0 auto;
+}
+.timer-bar.live .timer-lbl{color:var(--accent-ink);opacity:.8}
+.timer-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.timer-val{
+  font-family:var(--f-mono);font-size:19px;font-weight:600;letter-spacing:-.04em;
+  line-height:1;font-variant-numeric:tabular-nums;transition:font-size .2s;
+}
+.timer-bar.live .timer-val{font-size:38px;color:var(--accent-ink)}
+.timer-track{height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.timer-bar.live .timer-track{background:color-mix(in srgb,var(--accent-ink) 26%,transparent)}
+.timer-fill{height:100%;background:var(--accent);width:0%;transition:width 1s linear}
+.timer-bar.live .timer-fill{background:var(--accent-ink)}
+.timer-adj{
+  flex:0 0 auto;font-family:var(--f-mono);font-size:13px;font-weight:600;
+  background:var(--surface-3);border-radius:9px;padding:10px 12px;
+}
+.timer-bar.live .timer-adj{background:color-mix(in srgb,var(--accent-ink) 20%,transparent);
+  color:var(--accent-ink)}
+@keyframes ping{0%{transform:scale(1)}45%{transform:scale(1.14)}100%{transform:scale(1)}}
+.tick.just{animation:ping .26s ease-out}
+
+.ex-card{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-l);overflow:hidden}
+.ex-card.done{opacity:.62}
+.ex-head{padding:13px 14px 11px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ex-head .nm{font-weight:700;font-size:15.5px;letter-spacing:-.015em;line-height:1.2}
+.ex-head .meta{font-size:11.5px;color:var(--text-faint);margin-top:3px}
+.ex-rx{
+  display:flex;gap:8px;padding:0 14px 11px;flex-wrap:wrap;
+}
+.rx-tag{
+  font-family:var(--f-mono);font-size:11px;font-weight:600;
+  background:var(--surface-2);border-radius:6px;padding:3px 7px;color:var(--text-dim);
+}
+.why{
+  margin:0 14px 12px;padding:10px 12px;border-radius:10px;font-size:12.5px;line-height:1.45;
+  background:var(--surface-2);color:var(--text-dim);border-left:3px solid var(--line);
+}
+.why.warn{background:var(--pink-soft);color:var(--pink);border-left-color:var(--pink)}
+.why.hit{background:var(--accent-soft);color:var(--accent);border-left-color:var(--accent)}
+
+.set-tbl{border-top:1px solid var(--line-soft)}
+.set-hdr,.set-row{
+  display:grid;grid-template-columns:18px 1fr 1fr 46px 42px;
+  gap:5px;align-items:center;padding:8px 9px;
+}
+.set-hdr{
+  font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--text-faint);padding-top:9px;padding-bottom:4px;
+}
+.set-hdr span:nth-child(2),.set-hdr span:nth-child(3){text-align:center}
+.set-hdr span:nth-child(4){text-align:center}
+.set-row{border-top:1px solid var(--line-soft)}
+.set-row.logged{background:var(--accent-soft)}
+.set-n{font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--text-faint)}
+.set-row.logged .set-n{color:var(--hit)}
+
+.stepper{display:flex;align-items:center;background:var(--surface-2);border-radius:9px;overflow:hidden}
+.set-row.logged .stepper{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.stepper button{
+  width:29px;height:40px;display:grid;place-items:center;
+  font-size:17px;font-weight:600;color:var(--text-dim);flex:0 0 auto;
+}
+.stepper button:active{background:var(--surface-3)}
+.stepper .val{
+  flex:1;text-align:center;font-family:var(--f-mono);font-size:16.5px;font-weight:600;
+  letter-spacing:-.03em;min-width:0;padding:0 1px;
+}
+.stepper input.val{background:transparent;border:none;width:100%;text-align:center;
+  -moz-appearance:textfield;appearance:textfield}
+.stepper input.val::-webkit-outer-spin-button,
+.stepper input.val::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+.rir-sel{
+  height:40px;border-radius:9px;background:var(--surface-2);border:none;
+  font-family:var(--f-mono);font-size:14px;font-weight:600;text-align:center;
+  padding:0 2px;width:100%;
+}
+.set-row.logged .rir-sel{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+
+.tick{
+  width:42px;height:40px;border-radius:9px;background:var(--surface-2);
+  display:grid;place-items:center;color:var(--text-faint);
+}
+.tick svg{width:19px;height:19px;stroke-width:2.6}
+.set-row.logged .tick{background:var(--accent);color:var(--accent-ink)}
+
+.ex-foot{display:flex;gap:8px;padding:9px 10px 12px;border-top:1px solid var(--line-soft)}
+.ex-foot .btn{flex:1}
+
+/* The tab bar is hidden during a session, so this sits near the real bottom.
+   The fade keeps the card underneath from colliding with the button. */
+.sess-actions{
+  position:sticky;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+  z-index:15;margin-top:18px;padding-top:22px;
+  background:linear-gradient(180deg, transparent 0%, var(--bg) 58%);
+}
+
+/* feedback sheet */
+.fb-group{padding:13px 0;border-bottom:1px solid var(--line-soft)}
+.fb-group:last-child{border-bottom:none}
+.fb-group .m{font-weight:700;font-size:14px;margin-bottom:9px}
+.fb-q{display:grid;grid-template-columns:62px 1fr;gap:9px;align-items:center;margin-bottom:7px}
+.fb-q .lbl{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint)}
+.fb-opts{display:grid;gap:4px}
+.fb-opts.n3{grid-template-columns:repeat(3,1fr)}
+.fb-opts.n4{grid-template-columns:repeat(4,1fr)}
+.fb-opt{
+  padding:8px 2px;border-radius:8px;background:var(--surface-2);
+  font-size:11px;font-weight:700;text-align:center;color:var(--text-dim);
+}
+.fb-opt[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+.chart-wrap{margin:0 -4px;overflow-x:auto}
+svg.chart{display:block;width:100%;height:auto;overflow:visible}
+.vol-row{display:grid;grid-template-columns:76px 1fr 44px;gap:9px;align-items:center;padding:6px 0}
+.vol-name{font-size:12.5px;font-weight:600}
+.vol-track{height:20px;background:var(--surface-2);border-radius:5px;position:relative;overflow:hidden}
+.vol-fill{position:absolute;inset:0 auto 0 0;border-radius:5px;background:var(--accent)}
+.vol-fill.under{background:var(--pink)}
+.vol-fill.over{background:var(--pink)}
+.vol-mev,.vol-mrv{position:absolute;top:0;bottom:0;width:2px;background:var(--text-faint);opacity:.55}
+.vol-num{font-family:var(--f-mono);font-size:12.5px;font-weight:600;text-align:right}
+
+.pr-row{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-soft)}
+.pr-row:last-child{border-bottom:none}
+
+/* ============================================================
+   FEED
+   ============================================================ */
+.fcard{
+  background:var(--surface);border:1px solid var(--line-soft);
+  border-radius:var(--r-l);padding:15px;
+}
+.fcard + .fcard{margin-top:10px}
+.fcard.you{border-color:var(--pink);background:linear-gradient(180deg,var(--pink-soft) 0%, var(--surface) 52%)}
+.fcard h3{font-size:16.5px;font-weight:800;letter-spacing:-.02em;margin:8px 0 5px;line-height:1.22;text-wrap:balance}
+.fcard .take{font-size:13.5px;color:var(--text-dim);margin:0;line-height:1.5}
+.fcard .body{font-size:13.5px;line-height:1.62;margin:11px 0 0;color:var(--text)}
+.fcard .body p{margin:0 0 9px}
+.fcard .body p:last-child{margin-bottom:0}
+.fcard .body ul{margin:0 0 9px;padding-left:17px}
+.fcard .body li{margin-bottom:4px}
+.fcard .src{
+  margin-top:12px;padding-top:10px;border-top:1px solid var(--line-soft);
+  font-size:11px;color:var(--text-faint);display:flex;justify-content:space-between;gap:10px;
+}
+.tier{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;
+  padding:3px 7px;border-radius:5px}
+.tier-strong{background:var(--accent);color:var(--accent-ink)}
+.tier-moderate{background:var(--accent-soft);color:var(--accent)}
+.tier-weak{background:var(--surface-3);color:var(--text-dim)}
+.tier-none{background:var(--pink-soft);color:var(--pink)}
+.expander{margin-top:10px;font-size:12.5px;font-weight:700;color:var(--accent)}
+
+/* ============================================================
+   PLAN / SETTINGS
+   ============================================================ */
+.day-card{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r-l);overflow:hidden}
+.day-card + .day-card{margin-top:11px}
+.day-head{padding:13px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+  background:var(--surface-2)}
+.day-head .nm{font-weight:800;font-size:15px;letter-spacing:-.015em}
+.day-head .ct{font-family:var(--f-mono);font-size:11.5px;color:var(--text-faint)}
+.ex-line{display:grid;grid-template-columns:1fr auto auto;gap:9px;align-items:center;
+  padding:10px 14px;border-top:1px solid var(--line-soft)}
+.ex-line .nm{font-size:13.5px;font-weight:600}
+.ex-line .mg{font-size:11px;color:var(--text-faint);margin-top:1px}
+.setcount{display:flex;align-items:center;gap:0;background:var(--surface-2);border-radius:8px}
+.setcount button{width:28px;height:30px;display:grid;place-items:center;color:var(--text-dim);font-size:15px}
+.setcount .v{font-family:var(--f-mono);font-size:13px;font-weight:600;width:22px;text-align:center}
+.xbtn{width:30px;height:30px;display:grid;place-items:center;color:var(--text-faint);border-radius:8px}
+.xbtn:active{background:var(--surface-2)}
+
+.field{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;
+  padding:12px 0;border-bottom:1px solid var(--line-soft)}
+.field:last-child{border-bottom:none}
+.field .lbl{font-size:13.5px;font-weight:600}
+.field .hint{font-size:11.5px;color:var(--text-faint);margin-top:2px;line-height:1.35}
+.field input[type="number"],.field select{
+  background:var(--surface-2);border:1px solid transparent;border-radius:9px;
+  padding:9px 10px;font-family:var(--f-mono);font-size:14px;font-weight:600;
+  text-align:right;width:92px;
+}
+.field select{text-align:left;width:auto;font-family:var(--f-display)}
+.seg{display:flex;background:var(--surface-2);border-radius:9px;padding:2px;gap:2px}
+.seg button{padding:7px 13px;border-radius:7px;font-size:12.5px;font-weight:700;color:var(--text-dim)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+
+/* modal */
+.sheet-bg{
+  position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.45);
+  display:flex;align-items:flex-end;justify-content:center;
+  animation:fade .16s ease-out;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.sheet{
+  background:var(--bg);width:100%;max-width:560px;
+  border-radius:20px 20px 0 0;max-height:88vh;overflow-y:auto;
+  padding:18px 16px calc(env(safe-area-inset-bottom,0px) + 18px);
+  animation:up .22s cubic-bezier(.2,.8,.3,1);
+}
+@keyframes up{from{transform:translateY(22px)}to{transform:translateY(0)}}
+.sheet h2{font-size:20px;font-weight:900;letter-spacing:-.025em;margin:0 0 3px}
+.sheet .sub{font-size:13px;color:var(--text-dim);margin:0 0 16px}
+.search{
+  width:100%;background:var(--surface-2);border:1px solid transparent;border-radius:11px;
+  padding:12px 13px;font-size:15px;margin-bottom:12px;
+}
+.pick{padding:12px 13px;border-radius:11px;background:var(--surface);
+  border:1px solid var(--line-soft);margin-bottom:7px;display:block;width:100%;text-align:left}
+.pick .nm{font-weight:600;font-size:14px}
+.pick .mg{font-size:11.5px;color:var(--text-faint);margin-top:2px}
+
+.banner{
+  display:flex;gap:10px;align-items:flex-start;
+  background:var(--warn-soft);color:var(--warn);
+  border-radius:var(--r-m);padding:11px 13px;font-size:12.5px;line-height:1.45;
+  margin-bottom:12px;
+}
+.banner button{font-weight:800;text-decoration:underline;white-space:nowrap}
+.syncdot{width:6px;height:6px;border-radius:50%;background:var(--text-faint);flex:0 0 auto}
+.syncdot.on{background:var(--hit)}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 18px);
+  background:var(--text);color:var(--bg);padding:11px 17px;border-radius:999px;
+  font-size:13px;font-weight:700;z-index:80;box-shadow:var(--shadow-lift);
+  animation:up .2s ease-out;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <main id="view"></main>
+  <nav id="tabs" aria-label="Main"></nav>
+</div>
+<div id="layer"></div>
+
+<script>
+"use strict";
+/* ==========================================================================
+   IRON LEDGER
+   A block-periodised PPL logger. Progression follows double progression
+   within a block (Matthews) and e1RM-anchored re-prescription across block
+   boundaries; set volume autoregulates from per-muscle pump/soreness/
+   performance feedback (Israetel / RP).
+   ========================================================================== */
+
+/* ---------- 1. Training constants ---------------------------------------- */
+
+const PHASE = {
+  strength: {
+    label:'Strength',
+    rirByWeek:[2,2,1,1,0,0,0],
+    comp:[5,7], iso:[8,10],
+    note:'Compounds 5–7, accessories 8–10. Sets held flat; load is the variable.'
+  },
+  hypertrophy: {
+    label:'Hypertrophy',
+    rirByWeek:[3,2,2,1,1,0,0],
+    comp:[8,10], iso:[10,12],
+    note:'Compounds 8–10, accessories 10–12. Sets ramp week to week toward your limit.'
+  },
+  deload: {
+    label:'Deload',
+    rirByWeek:[4,4,4,4,4,4,4],
+    comp:[8,10], iso:[10,12],
+    note:'Half the sets, ~65% of the load. Dissipate fatigue, keep the groove.'
+  }
+};
+
+// RP volume landmarks — weekly hard sets per muscle group.
+const LANDMARK = {
+  Chest:{mev:8,mav:16,mrv:22}, Back:{mev:10,mav:18,mrv:25},
+  'Side delts':{mev:8,mav:19,mrv:26}, 'Rear delts':{mev:6,mav:16,mrv:24},
+  'Front delts':{mev:0,mav:8,mrv:12}, Triceps:{mev:6,mav:14,mrv:22},
+  Biceps:{mev:8,mav:15,mrv:22}, Quads:{mev:8,mav:16,mrv:20},
+  Hamstrings:{mev:4,mav:10,mrv:16}, Glutes:{mev:4,mav:10,mrv:16},
+  Calves:{mev:8,mav:14,mrv:20}, Abs:{mev:0,mav:12,mrv:20},
+  Forearms:{mev:0,mav:8,mrv:16}, Traps:{mev:0,mav:10,mrv:20}
+};
+const MUSCLES = Object.keys(LANDMARK);
+
+/* ---------- 2. Exercise library + archived history -----------------------
+   SEED.EX  [id, name, muscleIdx, isLower, isCompound, secondaryIdx[]]
+   SEED.ARCH one row per logged session: [date, dayIdx, phaseIdx, entries[]]
+             entry = [exIdx, weight, rir, repLo, repHi, setCount]
+   Built from Ramiar's written log, 1 Mar 2024 – 15 Sep 2026.
+   ------------------------------------------------------------------------ */
+const SEED = {"MUS":["Chest","Back","Front delts","Side delts","Rear delts","Triceps","Biceps","Quads","Hamstrings","Glutes","Calves","Abs","Forearms","Traps"],"EX":[["bench-press","Bench Press",0,0,1,[5,2]],["incline-bench-press","Incline Bench Press",0,0,1,[2,5]],["db-bench-press","DB Bench Press",0,0,1,[5,2]],["db-incline-bench-press","DB Incline Bench Press",0,0,1,[2,5]],["db-chest-opener","DB Chest Opener",0,0,0,[]],["incline-db-flye","Incline DB Flye",0,0,0,[]],["bench-pullover","Bench Pullover",1,0,0,[0]],["dips","Dips",0,0,1,[5,2]],["push-up","Push-up",0,0,1,[5]],["bb-standing-shoulder-press","BB Standing Shoulder Press",2,0,1,[5]],["db-shoulder-press","DB Shoulder Press",2,0,1,[5]],["db-arnold-press","DB Arnold Press",2,0,1,[3,5]],["db-shoulder-opener","DB Shoulder Opener",3,0,0,[]],["total-lateral-raise","Total Lateral Raise",3,0,0,[]],["z-bar-straight-lift","Z Bar Straight Lift",2,0,0,[]],["z-bar-elbow-raise","Z Bar Elbow Raise",3,0,0,[13]],["db-seated-t-shape","DB Seated T-Shape",4,0,0,[]],["db-laid-flye","DB Laid Flye",4,0,0,[]],["db-seated-shoulder-flye","DB Seated Shoulder Flye",3,0,0,[]],["db-full-shoulder-opener","DB Full Shoulder Opener",3,0,0,[]],["reverse-fly","Reverse Fly",4,0,0,[]],["face-pull","Face Pull",4,0,0,[13]],["bb-row","BB Row",1,0,1,[4,6]],["db-bench-row","DB Bench Row",1,0,1,[6]],["standing-lat-pulldown","Standing Lat Pulldown",1,0,1,[6]],["lat-machine","Lat Machine",1,0,1,[6]],["pull-up","Pull-up",1,0,1,[6,12]],["reverse-row","Reverse Row",1,0,0,[4]],["bb-landmine-row","BB Landmine Row",1,0,1,[4]],["z-bar-row","Z Bar Row",1,0,1,[4]],["machine-row","Machine Row",1,0,1,[4]],["z-bar-tricep-press","Z Bar Tricep Press",5,0,0,[]],["tricep-pushdown","Tricep Pushdown",5,0,0,[]],["arm-extension","Arm Extension (machine)",5,0,0,[]],["db-single-tricep","DB Single Tricep Extension",5,0,0,[]],["bb-bicep-curl","BB Bicep Curl",6,0,0,[12]],["z-bar-bicep-curl","Z Bar Bicep Curl",6,0,0,[12]],["incline-db-curl","Incline DB Curl",6,0,0,[]],["db-curl","DB Curl",6,0,0,[12]],["preacher-curl","Preacher Curl",6,0,0,[]],["arm-curl","Arm Curl (machine)",6,0,0,[]],["deadlift","Deadlift",8,1,1,[9,1]],["romanian-deadlift","Romanian Deadlift",8,1,1,[9,1]],["bb-high-bar-squat","BB High Bar Squat",7,1,1,[9,8]],["db-lunge","DB Lunge",7,1,1,[9]],["leg-press","Leg Press",7,1,1,[9]],["quad-extension","Quad Extension",7,1,0,[]],["prone-leg-curl","Prone Leg Curl",8,1,0,[]],["calf-raise","Calf Raise",10,1,0,[]],["plate-wheel","Plate Wheel",11,0,0,[]]],"ARCH":[["2024-03-01",4,1,[[44,10.0,2,10,10,3],[4,0.0,2,10,10,3],[34,12.5,2,10,10,3]]],["2024-03-05",4,0,[[41,30.0,2,3,3,5],[0,20.0,2,3,3,8],[35,11.0,2,3,3,8]]],["2024-03-08",4,0,[[23,15.0,2,3,3,8],[17,4.0,2,3,3,8],[43,16.0,2,3,3,8]]],["2024-03-11",4,1,[[0,25.0,2,10,10,3],[9,16.0,2,10,10,3],[31,15.0,2,10,10,3]]],["2024-03-13",4,1,[[41,25.0,2,10,10,3],[22,10.0,2,10,10,3],[35,13.5,2,10,10,3]]],["2024-03-15",4,1,[[43,10.0,2,10,10,3],[42,10.0,2,10,10,3],[44,10.0,2,10,10,3]]],["2024-03-18",2,1,[[0,15.0,2,10,10,3],[9,17.0,2,10,10,3],[31,17.0,2,10,10,3]]],["2024-03-19",1,1,[[41,30.0,2,10,10,3],[22,10.0,2,10,10,3],[36,15.0,2,10,10,3]]],["2024-03-20",3,1,[[43,15.0,2,10,10,3],[42,10.0,2,10,10,3],[44,10.0,2,10,10,3]]],["2024-03-21",2,1,[[0,30.0,2,10,10,3],[9,17.0,2,10,10,3],[31,17.0,2,10,10,3]]],["2024-03-25",1,1,[[41,35.0,2,10,10,3],[22,15.0,2,10,10,3],[36,17.0,2,10,10,3]]],["2024-03-26",3,1,[[43,20.0,2,10,10,3],[42,12.0,2,10,10,3],[44,12.0,2,10,10,3]]],["2024-03-28",2,1,[[0,35.0,2,10,10,3],[9,17.0,2,10,10,3],[31,17.0,2,10,10,3]]],["2024-03-29",1,1,[[41,40.0,2,10,10,3],[22,25.0,2,10,10,3],[36,18.0,2,10,10,3]]],["2024-04-02",2,1,[[0,40.0,2,10,10,3],[9,18.0,2,10,10,3],[31,18.0,2,10,10,3]]],["2024-04-03",1,1,[[41,40.0,2,10,10,3],[22,25.0,2,10,10,3],[36,18.0,2,10,10,3]]],["2024-04-04",3,1,[[43,25.0,2,10,10,3],[42,12.5,2,10,10,3],[44,12.5,2,10,10,3]]],["2024-04-11",2,1,[[0,35.0,2,10,10,3],[12,6.0,2,10,10,3],[34,20.0,2,10,10,3]]],["2024-04-12",1,1,[[23,15.0,2,10,10,3],[35,0.0,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-04-15",2,1,[[0,35.0,2,10,10,3],[12,6.0,2,10,10,3],[31,15.0,2,10,10,3]]],["2024-04-16",1,1,[[23,15.0,2,10,10,3],[35,0.0,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-04-25",2,1,[[0,35.0,2,10,10,3],[12,6.0,2,10,10,3],[31,15.0,2,10,10,3]]],["2024-04-26",1,1,[[41,35.0,2,10,10,3],[35,0.0,2,10,10,3],[27,0.0,2,10,10,3]]],["2024-04-27",3,1,[[43,20.0,2,10,10,3],[48,15.0,2,10,10,3],[44,10.0,2,10,10,3]]],["2024-04-29",2,1,[[0,40.0,2,10,10,3],[12,7.0,2,10,10,3],[31,17.5,2,10,10,3]]],["2024-04-30",1,1,[[23,16.5,2,10,10,3],[38,6.5,2,10,10,3],[22,20.0,2,10,10,3]]],["2024-05-02",2,1,[[3,13.5,2,10,10,3],[12,7.5,2,10,10,3],[31,16.0,2,10,10,3]]],["2024-05-07",2,1,[[0,45.0,2,10,10,3],[12,8.5,2,10,10,3],[34,10.0,2,10,10,3]]],["2024-05-08",1,1,[[23,17.0,2,10,10,3],[35,5.0,2,10,10,3],[22,20.0,2,10,10,3]]],["2024-05-09",2,1,[[3,17.0,2,10,10,3],[18,5.0,2,10,10,3],[31,17.5,2,10,10,3]]],["2024-05-10",1,1,[[22,20.0,2,10,10,3],[36,15.0,2,10,10,3],[27,0.0,2,10,10,3]]],["2024-05-13",2,1,[[0,50.0,2,10,10,3],[11,9.0,2,10,10,3],[34,11.0,2,10,10,3]]],["2024-05-14",1,1,[[22,20.0,2,10,10,3],[35,10.0,2,10,10,3],[23,17.5,2,10,10,3]]],["2024-05-16",2,1,[[3,18.5,2,10,10,3],[18,5.0,2,10,10,3],[31,18.5,2,10,10,3]]],["2024-05-17",1,1,[[41,35.0,2,10,10,3],[36,16.0,2,10,10,3],[23,18.0,2,10,10,3]]],["2024-05-20",2,1,[[0,50.0,2,10,10,3],[4,7.0,2,10,10,3],[11,10.0,2,10,10,3],[31,19.0,2,10,10,3]]],["2024-05-21",1,1,[[22,20.0,2,10,10,3],[35,10.0,2,10,10,3],[23,18.0,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-05-23",2,1,[[3,18.5,2,10,10,3],[4,15.0,2,10,10,3],[18,5.0,2,10,10,3],[34,11.0,2,10,10,3]]],["2024-05-27",1,1,[[41,40.0,2,10,10,3],[27,0.0,2,10,10,3],[22,20.0,2,10,10,3],[36,17.0,2,10,10,3]]],["2024-05-28",2,1,[[0,50.0,2,10,10,3],[4,6.0,2,10,10,3],[11,10.0,2,10,10,3],[31,19.0,2,10,10,3]]],["2024-05-29",1,1,[[22,20.0,2,10,10,3],[35,10.0,2,10,10,3],[23,18.5,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-05-30",2,1,[[3,19.5,2,10,10,3],[4,17.5,2,10,10,3],[18,5.0,2,10,10,3],[34,11.5,2,10,10,3]]],["2024-06-03",1,1,[[41,50.0,2,10,10,3],[26,0.0,2,10,10,3],[22,20.0,2,10,10,3],[38,12.5,2,10,10,3]]],["2024-06-04",2,1,[[3,21.0,2,10,10,3],[4,19.0,2,10,10,3],[18,5.0,2,10,10,3],[34,11.5,2,10,10,3],[9,5.0,2,10,10,3]]],["2024-06-06",1,1,[[22,20.0,2,10,10,3],[35,10.0,2,10,10,3],[23,18.5,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-06-10",2,1,[[0,50.0,2,10,10,3],[3,18.5,2,10,10,3],[18,5.0,2,10,10,3],[9,5.0,2,10,10,3],[31,19.0,2,10,10,3]]],["2024-06-11",1,1,[[22,20.0,2,10,10,3],[41,50.0,2,10,10,3],[35,10.0,2,10,10,3],[26,0.0,2,10,10,3]]],["2024-06-12",2,0,[[0,50.0,1,5,7,4],[3,20.0,1,5,7,4],[18,5.0,2,8,10,4],[9,5.0,2,8,8,4],[31,19.0,2,8,10,4]]],["2024-06-13",1,0,[[41,50.0,3,5,7,4],[22,20.0,3,8,8,4],[23,19.0,3,8,8,4],[35,10.0,2,8,10,4],[26,0.0,2,8,8,4]]],["2024-06-17",2,0,[[0,50.0,1,5,7,4],[3,20.0,1,8,8,4],[18,5.0,2,8,10,4],[9,5.0,2,8,8,4],[31,20.0,2,8,10,4]]],["2024-06-18",1,0,[[41,50.0,2,5,7,4],[26,0.0,2,8,8,4],[22,25.0,2,8,8,4],[23,20.0,2,8,8,4],[38,9.0,2,8,10,4]]],["2024-07-01",2,0,[[0,50.0,2,5,7,4],[3,19.0,1,8,8,4],[18,5.0,2,8,10,4],[9,5.0,1,8,8,4],[31,19.0,2,8,10,4]]],["2024-07-04",4,1,[[2,21.0,2,8,10,4],[22,25.0,2,8,10,4],[9,5.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-07-09",4,1,[[0,40.0,2,8,10,4],[9,5.0,2,8,10,4],[22,25.0,2,8,10,4],[31,18.0,2,10,12,4]]],["2024-07-11",4,1,[[2,21.0,2,8,10,4],[9,5.0,2,8,10,4],[23,20.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-07-16",4,1,[[3,19.0,2,8,10,4],[12,6.0,2,10,12,4],[41,35.0,2,8,10,4],[2,19.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-07-17",4,1,[[0,40.0,2,8,10,4],[12,5.0,2,10,12,4],[9,5.0,2,8,10,4],[22,30.0,2,8,10,4],[31,18.0,2,10,12,4]]],["2024-07-22",0,1,[[1,30.0,2,8,10,4],[12,7.0,2,10,12,4],[2,21.0,2,8,10,4],[9,5.0,1,8,10,4],[31,19.0,2,8,8,4]]],["2024-07-24",1,1,[[41,40.0,2,8,10,4],[23,20.0,2,8,10,4],[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-07-25",2,1,[[0,40.0,2,8,10,4],[12,7.0,2,10,12,4],[2,21.0,2,8,10,4],[9,5.0,2,8,10,4],[31,18.0,2,10,12,4]]],["2024-07-30",0,1,[[1,30.0,2,8,10,4],[12,7.0,2,10,12,4],[3,20.0,2,8,10,4],[9,5.0,2,8,10,4],[31,18.5,2,10,12,4]]],["2024-08-02",4,1,[[2,21.0,2,8,10,4],[12,7.0,2,10,12,4],[22,30.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-08-05",2,0,[[0,45.0,2,8,8,4],[2,23.0,2,8,8,4],[9,10.0,2,8,8,4],[12,8.0,2,8,10,4],[31,18.5,2,8,10,4]]],["2024-08-06",1,1,[[41,50.0,2,8,10,4],[23,24.0,2,8,10,4],[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[35,5.0,2,10,12,4]]],["2024-08-08",2,0,[[0,45.0,2,8,8,4],[3,22.0,2,8,8,4],[15,20.0,2,8,10,4],[9,10.0,2,8,8,4],[31,18.5,2,8,10,4]]],["2024-08-09",1,1,[[41,50.0,2,8,10,4],[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[26,0.0,2,8,10,4],[35,10.0,2,10,12,4]]],["2024-08-27",2,1,[[0,50.0,2,8,10,4],[2,23.0,2,8,10,4],[9,10.0,2,8,10,4],[12,7.0,2,8,8,4],[31,18.5,2,8,8,4]]],["2024-08-29",1,0,[[41,50.0,2,8,8,4],[23,26.0,2,8,8,4],[26,0.0,2,8,8,4],[22,30.0,2,8,8,4],[35,10.0,2,8,10,4]]],["2024-08-30",0,1,[[1,30.0,2,8,10,4],[0,45.0,2,8,10,4],[12,6.0,2,10,12,4],[15,20.0,2,10,12,4],[34,21.0,2,8,8,4]]],["2024-09-03",1,1,[[41,50.0,2,8,10,4],[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-04",2,1,[[0,50.0,2,8,10,4],[2,23.0,2,8,10,4],[12,8.0,2,10,12,4],[9,10.0,2,8,10,4],[31,18.5,2,8,10,4]]],["2024-09-05",1,1,[[41,55.0,2,8,10,4],[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-06",0,1,[[1,35.0,2,8,10,4],[3,22.0,2,8,10,4],[15,22.0,2,8,10,4],[12,7.0,2,8,8,4],[31,18.5,2,10,12,4]]],["2024-09-09",2,1,[[0,50.0,2,8,10,4],[2,25.0,2,8,10,4],[9,10.0,2,8,10,4],[12,9.0,2,8,8,4],[34,24.0,2,8,8,4]]],["2024-09-10",1,1,[[41,60.0,2,8,10,4],[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[26,0.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-11",0,1,[[1,35.0,2,8,10,4],[3,23.5,2,8,10,4],[15,24.0,2,10,12,4],[12,8.0,2,8,8,4],[31,19.0,2,10,12,4]]],["2024-09-16",2,1,[[0,50.0,2,8,10,4],[2,26.0,2,8,10,4],[9,10.0,2,8,10,4],[12,7.5,2,8,8,4],[31,20.0,2,8,8,4]]],["2024-09-17",1,1,[[41,60.0,2,8,10,4],[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[26,0.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-19",2,1,[[0,55.0,2,8,10,4],[3,23.5,1,8,10,4],[15,26.0,2,8,8,4],[49,10.0,2,16,16,4],[31,20.0,2,8,8,4]]],["2024-09-20",1,1,[[41,60.0,2,8,10,4],[22,50.0,2,8,10,4],[23,26.0,2,8,10,4],[26,0.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-23",2,1,[[0,55.0,2,8,10,4],[2,26.0,2,8,10,4],[9,10.0,2,8,10,4],[12,7.5,2,8,10,4],[31,20.0,2,8,8,4]]],["2024-09-24",1,1,[[41,60.0,2,8,10,4],[22,50.0,2,8,10,4],[23,26.0,2,8,10,4],[26,0.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-09-26",2,0,[[0,55.0,2,8,8,4],[3,23.0,2,8,8,4],[9,15.0,2,8,8,4],[15,26.0,2,8,10,4]]],["2024-09-27",1,1,[[41,60.0,2,8,10,4],[22,50.0,2,8,10,4],[23,26.0,2,8,10,4],[27,0.0,2,10,12,4]]],["2024-10-01",0,1,[[12,7.5,2,10,12,4],[9,15.0,2,8,10,4],[0,55.0,2,8,10,4],[2,26.0,2,8,10,4],[31,20.0,2,8,8,4]]],["2024-10-02",1,1,[[41,60.0,2,8,10,4],[23,26.0,2,8,10,4],[22,35.0,2,8,10,4],[27,0.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-10-03",2,1,[[0,55.0,2,8,10,4],[4,11.5,2,8,8,4],[49,10.0,2,16,16,4],[15,26.0,2,8,10,4],[31,20.0,2,8,10,4]]],["2024-10-04",1,1,[[26,0.0,2,8,10,4],[22,40.0,2,8,10,4],[23,27.0,2,8,10,4],[27,5.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-10-07",2,1,[[0,55.0,2,8,10,4],[4,12.0,2,8,10,4],[3,23.0,1,8,10,4],[15,27.0,2,8,10,4],[31,20.0,2,8,10,4]]],["2024-10-08",1,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[27,7.0,2,8,10,4],[17,1.0,2,8,10,4],[38,13.5,2,8,10,4]]],["2024-10-10",2,1,[[9,15.0,2,8,10,4],[12,8.0,2,8,8,4],[15,28.0,2,8,10,4],[2,26.0,2,8,10,4],[34,12.0,2,8,8,4]]],["2024-10-11",1,1,[[27,5.0,2,8,10,4],[22,40.0,2,8,10,4],[23,28.0,2,8,10,4],[26,0.0,2,8,10,4],[38,12.0,2,8,8,4]]],["2024-10-14",2,1,[[0,55.0,2,8,10,4],[4,12.0,2,8,8,4],[1,30.0,2,8,10,4],[19,2.5,2,8,8,4],[31,20.0,2,8,10,4]]],["2024-10-15",1,1,[[41,60.0,2,8,10,4],[22,45.0,2,8,10,4],[27,10.0,2,8,8,4],[17,1.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-10-17",0,1,[[12,8.0,2,8,10,4],[14,5.0,2,8,8,4],[15,28.0,2,8,8,4],[2,26.0,2,8,10,4],[34,12.0,2,8,8,4]]],["2024-10-18",1,0,[[22,40.0,2,8,8,4],[23,28.0,2,8,8,4]]],["2024-10-21",2,1,[[0,55.0,2,8,10,4],[1,30.0,2,8,10,4],[4,11.0,2,8,10,4],[2,26.0,2,8,10,4],[15,28.5,2,8,8,4],[31,21.0,2,8,8,4]]],["2024-10-22",1,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[26,0.0,2,8,10,4],[6,20.0,2,8,8,4],[35,10.0,2,8,10,4],[17,2.5,2,8,10,4]]],["2024-10-24",0,1,[[12,8.0,2,8,10,4],[9,15.0,2,8,10,4],[14,7.0,2,8,8,4],[19,2.5,2,8,8,4],[3,23.0,2,8,10,4],[34,12.0,2,8,10,4]]],["2024-10-25",1,0,[[27,10.0,2,8,10,4],[6,20.0,2,8,10,4],[26,0.0,2,8,8,4],[23,28.0,2,8,8,4],[38,13.5,2,8,10,4]]],["2024-10-28",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[4,11.0,2,8,10,4],[3,23.0,1,8,10,4],[12,8.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2024-10-29",1,1,[[41,65.0,2,8,10,4],[22,40.0,2,8,10,4],[26,0.0,2,8,10,4],[6,20.0,2,8,8,4],[17,2.5,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-10-31",0,1,[[14,7.0,2,8,8,4],[9,15.0,2,8,10,4],[19,2.5,2,8,8,4],[15,28.5,2,8,8,4],[2,26.0,2,8,10,4],[34,12.0,2,8,10,4]]],["2024-11-05",2,1,[[0,55.0,2,8,10,4],[2,26.0,2,8,10,4],[1,35.0,2,8,10,4],[4,11.0,2,8,10,4],[12,8.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2024-11-07",1,1,[[26,0.0,2,8,10,4],[22,40.0,2,8,10,4],[6,20.0,2,8,10,4],[23,28.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2024-11-08",2,1,[[9,15.0,2,8,10,4],[15,28.5,2,8,10,4],[14,8.0,2,8,8,4],[12,8.0,2,8,10,4],[3,23.0,1,8,10,4],[34,12.0,2,8,10,4]]],["2024-11-11",1,1,[[26,0.0,2,8,10,4],[41,65.0,2,8,10,4],[6,24.0,2,10,12,4],[17,2.5,2,10,12,4],[22,40.0,2,8,10,4],[38,10.0,2,8,10,4]]],["2024-11-12",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[3,23.0,1,8,10,4],[4,10.0,2,8,10,4],[15,28.5,2,10,12,4],[31,21.0,2,8,10,4]]],["2024-11-18",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,26.0,2,6,8,4],[3,23.0,2,6,8,4],[4,10.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2024-11-19",1,1,[[26,0.0,2,8,10,4],[41,65.0,2,8,10,4],[6,20.0,2,8,10,4],[22,40.0,2,8,10,4],[17,2.5,2,8,10,4],[38,10.0,2,10,12,4]]],["2024-11-21",0,1,[[14,8.0,2,8,10,4],[9,15.0,2,8,10,4],[12,8.0,2,8,10,4],[15,28.5,2,8,10,4]]],["2024-11-22",1,1,[[27,10.0,2,10,12,4],[6,24.0,2,10,12,4],[23,28.0,2,8,10,4],[38,13.5,2,8,10,4]]],["2024-11-25",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,26.0,2,6,8,4],[4,10.0,2,8,10,4],[12,8.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2024-11-27",1,1,[[41,65.0,2,8,10,4],[22,40.0,2,8,10,4],[17,2.5,2,8,10,4],[35,10.0,2,10,12,4]]],["2024-11-29",4,1,[[9,15.0,2,8,10,4],[15,28.5,2,10,12,4],[3,23.0,2,6,8,4],[0,50.0,2,6,6,4],[23,28.0,2,8,10,4],[34,12.0,2,10,12,4]]],["2024-12-02",2,1,[[0,55.0,2,8,10,4],[3,23.0,2,8,10,4],[2,26.0,2,6,8,4],[4,10.0,2,10,12,4],[12,8.0,2,10,12,4],[31,21.0,2,8,10,4]]],["2024-12-03",1,1,[[41,65.0,2,8,10,4],[17,2.5,2,10,12,4],[22,40.0,2,8,10,4],[23,28.0,2,8,10,4],[6,20.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2024-12-05",2,1,[[9,15.0,2,8,10,4],[15,30.0,2,8,10,4],[14,8.0,2,8,8,4],[12,8.0,2,8,10,4],[2,26.0,2,8,10,4],[34,12.0,2,8,10,4]]],["2024-12-06",1,1,[[26,0.0,2,8,10,4],[27,10.0,2,8,8,4],[6,24.0,2,10,12,4],[38,9.5,2,8,10,4]]],["2024-12-09",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,26.0,2,6,8,4],[4,11.0,2,10,12,4],[12,9.0,2,8,8,4],[31,21.0,2,8,10,4]]],["2024-12-10",1,1,[[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[23,28.5,2,8,10,4],[17,2.5,2,10,12,4],[6,20.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2024-12-12",0,1,[[12,9.0,2,10,12,4],[9,15.0,2,8,10,4],[15,30.0,2,8,10,4],[14,8.0,1,8,8,4],[2,26.0,2,8,10,4],[34,12.0,2,8,10,4]]],["2024-12-18",2,1,[[0,55.0,2,8,10,4],[3,23.0,2,8,10,4],[2,26.0,2,6,8,4],[4,11.0,2,10,12,4],[12,9.0,2,8,8,4],[31,21.0,2,8,10,4]]],["2024-12-19",1,1,[[41,65.0,2,8,10,4],[22,40.0,2,8,10,4],[23,28.0,2,8,10,4],[6,20.0,2,10,12,4],[17,2.5,2,10,12,4],[35,10.0,2,10,12,4]]],["2025-01-13",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,25.0,2,6,8,4],[3,19.0,2,6,8,4],[4,10.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2025-01-14",1,1,[[41,55.0,2,8,10,4],[22,35.0,2,8,10,4],[6,18.0,2,10,12,4],[17,2.0,2,10,12,4],[35,5.0,2,10,12,4]]],["2025-01-16",0,1,[[12,9.0,2,10,12,4],[15,26.0,2,10,12,4],[14,6.0,2,8,10,4],[49,10.0,2,10,12,4],[0,50.0,2,8,10,4],[34,10.0,2,8,10,4]]],["2025-01-17",1,1,[[26,0.0,2,8,10,4],[23,25.0,2,8,10,4],[27,5.0,2,8,8,4],[38,9.0,2,8,8,4],[22,30.0,2,8,10,4]]],["2025-01-20",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,10.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2025-01-21",1,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[17,2.5,2,10,12,4],[27,7.5,2,8,8,4],[35,5.0,2,10,12,4]]],["2025-01-23",0,1,[[49,10.0,2,10,12,4],[12,9.0,2,8,8,4],[14,6.0,2,8,8,4],[15,27.0,2,8,10,4],[2,23.0,2,8,10,4],[34,10.0,2,8,10,4]]],["2025-01-24",1,1,[[26,0.0,2,8,10,4],[22,30.0,2,8,10,4],[6,18.0,2,10,12,4],[23,26.0,2,8,10,4],[38,9.0,2,8,10,4]]],["2025-01-27",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,9.0,2,10,12,4],[31,21.0,2,8,10,4]]],["2025-01-28",1,1,[[41,60.0,2,8,10,4],[22,45.0,2,8,10,4],[17,3.0,2,8,10,4],[23,26.0,2,8,10,4],[22,35.0,2,8,10,4],[35,10.0,2,10,12,4]]],["2025-01-30",0,1,[[49,10.0,2,10,12,4],[12,7.0,2,10,12,4],[14,6.0,2,8,8,4],[15,27.0,2,10,12,4],[3,23.0,2,8,10,4],[34,10.0,2,8,10,4]]],["2025-02-03",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,9.0,2,10,12,4],[31,21.0,2,8,10,4]]],["2025-02-04",1,1,[[41,60.0,2,8,10,4],[22,45.0,2,8,10,4],[17,3.0,2,8,10,4],[23,27.0,2,8,10,4],[22,40.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-02-06",0,1,[[49,10.0,2,10,12,4],[12,7.5,2,10,12,4],[14,6.0,2,8,8,4],[15,28.0,2,10,12,4],[3,18.0,2,8,10,4],[34,10.0,2,8,10,4]]],["2025-02-13",4,1,[[12,7.5,2,10,12,4],[24,20.0,2,8,10,4],[2,23.0,2,8,10,4],[35,10.0,2,8,10,4],[32,20.0,2,10,12,4]]],["2025-02-24",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,9.0,2,10,12,4],[32,20.0,2,10,12,4]]],["2025-02-27",1,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[17,3.0,2,8,10,4],[23,27.0,2,8,10,4],[24,25.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-02-28",0,1,[[49,10.0,2,10,12,4],[12,7.0,2,8,10,4],[15,27.0,2,8,10,4],[14,6.0,2,8,8,4],[10,13.5,2,8,10,4],[34,10.0,2,10,12,4]]],["2025-03-03",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,10.0,2,8,10,4],[31,21.0,2,8,10,4]]],["2025-03-04",1,1,[[41,60.0,2,8,10,4],[22,45.0,2,8,10,4],[17,3.0,2,10,12,4],[23,27.0,2,8,10,4],[24,25.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-03-06",0,1,[[12,7.0,2,8,10,4],[14,5.0,2,8,8,4],[15,28.0,2,8,10,4],[14,6.0,2,8,10,4],[10,14.5,2,8,10,4]]],["2025-03-10",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,17.0,2,8,10,4],[4,10.0,2,8,10,4],[32,20.0,2,10,12,4]]],["2025-03-11",1,1,[[41,60.0,2,8,10,4],[22,35.0,2,8,10,4],[17,3.0,2,8,10,4],[23,27.0,2,8,10,4],[24,25.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-03-12",0,1,[[49,10.0,2,10,12,4],[12,7.0,2,8,10,4],[14,7.0,2,8,8,4],[15,28.0,2,8,10,4],[10,15.0,2,8,10,4],[31,21.0,2,10,12,4],[14,4.0,2,8,10,4]]],["2025-03-24",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[4,10.0,2,8,10,4],[3,16.0,2,8,10,4],[32,20.0,2,10,12,4]]],["2025-03-25",1,1,[[41,60.0,2,8,10,4],[23,27.0,2,8,10,4],[22,35.0,2,8,10,4],[17,2.5,2,8,10,4],[24,25.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-03-27",0,1,[[10,15.0,2,8,10,4],[14,7.0,2,8,10,4],[12,7.5,2,8,10,4],[15,28.0,2,8,10,4],[14,4.0,2,8,10,4],[31,21.0,2,10,12,4]]],["2025-03-28",4,1,[[26,0.0,2,8,10,4],[3,17.5,2,8,10,4],[38,13.5,2,8,10,4],[22,30.0,2,8,10,4]]],["2025-03-31",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[4,10.0,2,8,10,4],[3,17.0,2,8,10,4],[32,20.0,2,10,12,4]]],["2025-04-02",1,1,[[41,60.0,2,8,10,4],[23,28.0,2,8,10,4],[22,40.0,2,8,10,4],[24,30.0,2,8,10,4],[17,2.5,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-04-03",0,1,[[14,7.0,2,10,12,4],[10,16.0,2,8,10,4],[15,28.0,2,8,10,4],[14,4.0,2,8,10,4],[12,7.5,2,8,8,4],[31,21.0,2,10,12,4]]],["2025-04-08",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[3,19.0,2,8,10,4],[2,23.0,2,8,10,4],[4,10.0,2,8,10,4],[31,22.0,2,10,12,4]]],["2025-04-10",1,1,[[26,0.0,2,8,10,4],[23,28.0,2,8,10,4],[22,40.0,2,8,10,4],[24,35.0,2,8,10,4]]],["2025-04-11",0,1,[[12,7.5,2,8,10,4],[1,35.0,2,8,10,4],[39,0.0,2,8,10,4],[14,7.0,2,10,12,4],[10,16.0,2,8,10,4]]],["2025-04-15",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[3,19.0,2,8,10,4],[4,9.0,2,8,10,4],[2,23.0,2,8,10,4],[31,21.0,2,10,12,4]]],["2025-04-16",1,1,[[26,0.0,2,8,10,4],[41,60.0,2,8,10,4],[22,35.0,2,8,10,4],[24,35.0,2,8,10,4],[17,2.5,2,8,10,4],[39,10.0,2,8,10,4]]],["2025-04-18",0,1,[[14,7.0,2,8,10,4],[10,16.0,2,8,10,4],[15,28.0,2,10,12,4],[1,30.0,2,8,10,4],[12,7.5,2,8,8,4],[32,25.0,2,10,12,4]]],["2025-04-22",2,1,[[3,19.0,2,8,10,4],[21,24.0,2,8,10,4],[4,7.0,2,10,12,4],[13,3.5,2,8,8,4],[8,0.0,2,8,10,4],[14,7.0,2,8,10,4]]],["2025-04-24",1,1,[[26,0.0,2,8,10,4],[7,0.0,2,8,10,4],[32,25.0,2,8,10,4],[29,22.0,2,8,10,4],[24,20.0,2,8,10,4],[31,15.0,2,8,10,4]]],["2025-04-25",4,1,[[0,55.0,2,8,10,4],[39,10.0,2,8,10,4],[1,35.0,2,8,10,4],[37,6.0,2,8,10,4],[2,23.0,2,8,10,4],[43,20.0,2,8,10,4]]],["2025-04-29",2,1,[[0,55.0,2,8,10,4],[12,7.5,2,10,12,4],[3,19.0,2,8,10,4],[14,7.5,2,8,10,4],[4,10.0,2,10,12,4],[10,16.0,2,8,10,4]]],["2025-05-02",4,1,[[1,35.0,2,8,10,4],[29,27.0,2,8,10,4],[10,16.0,2,8,10,4],[32,25.0,2,8,10,4],[37,6.0,2,8,10,4],[43,20.0,2,8,10,4]]],["2025-05-06",2,1,[[0,55.0,2,8,10,4],[10,17.0,2,8,10,4],[3,19.0,2,8,10,4],[14,7.5,2,8,8,4],[4,10.0,2,10,12,4],[12,7.5,2,8,10,4]]],["2025-05-08",4,1,[[23,28.0,2,8,10,4],[9,15.0,2,8,10,4],[24,23.0,2,8,10,4],[13,3.5,2,8,8,4],[29,27.0,2,8,10,4],[37,6.5,2,8,10,4]]],["2025-05-09",4,1,[[41,55.0,2,8,10,4],[1,35.0,2,8,10,4],[31,20.0,2,10,12,4],[43,20.0,2,8,10,4],[2,23.0,2,8,10,4]]],["2025-05-13",2,1,[[0,55.0,2,8,10,4],[10,17.0,2,8,10,4],[3,19.0,2,8,10,4],[14,7.5,2,8,8,4],[4,10.0,2,8,10,4],[12,7.0,2,8,10,4]]],["2025-05-15",4,1,[[23,29.0,2,8,10,4],[1,35.0,2,8,10,4],[24,23.0,2,8,10,4],[9,15.0,2,8,10,4],[22,30.0,2,8,10,4],[37,6.5,2,8,10,4]]],["2025-05-16",4,1,[[41,55.0,2,8,10,4],[2,23.0,2,8,10,4],[43,20.0,2,8,10,4],[17,2.5,2,8,10,4],[32,25.0,2,8,10,4]]],["2025-05-19",2,1,[[0,55.0,2,8,10,4],[10,17.0,2,8,10,4],[3,19.0,2,8,10,4],[14,7.5,2,8,8,4],[4,10.0,2,8,10,4],[12,7.0,2,8,10,4]]],["2025-05-20",1,1,[[23,29.0,2,8,10,4],[17,2.5,2,10,12,4],[24,23.0,2,8,10,4],[39,10.0,2,8,8,4],[22,30.0,2,8,10,4],[37,6.5,2,8,10,4]]],["2025-05-23",4,1,[[41,60.0,2,8,10,4],[1,35.0,2,8,10,4],[43,25.0,2,8,10,4],[2,23.0,2,8,10,4],[13,3.5,2,8,8,4],[31,20.0,2,8,10,4]]],["2025-05-26",2,1,[[0,55.0,2,8,10,4],[12,7.0,2,8,8,4],[3,19.0,2,8,10,4],[14,7.5,2,8,8,4],[4,10.0,2,8,10,4],[10,17.0,2,8,10,4]]],["2025-05-27",1,1,[[23,29.0,2,8,10,4],[17,3.0,2,8,10,4],[22,35.0,2,8,10,4],[32,25.0,2,8,10,4],[24,23.0,2,8,10,4],[37,7.5,2,10,12,4]]],["2025-05-29",4,1,[[1,35.0,2,8,10,4],[13,3.5,2,8,8,4],[2,23.0,2,8,10,4],[9,10.0,2,8,10,4],[26,0.0,2,8,10,4],[7,0.0,2,8,10,4]]],["2025-06-02",0,1,[[1,35.0,2,8,10,4],[13,3.5,2,8,8,4],[3,19.0,2,8,10,4],[12,7.0,2,8,8,4],[8,0.0,2,8,10,4],[32,23.0,2,8,10,4]]],["2025-06-03",1,1,[[23,30.0,2,8,10,4],[26,0.0,2,8,10,4],[22,35.0,2,8,10,4],[17,3.0,2,8,8,4],[24,24.0,2,8,10,4],[37,8.5,2,10,12,4]]],["2025-06-04",3,1,[[41,60.0,2,8,10,4],[43,25.0,2,8,10,4],[31,20.0,2,10,12,4],[44,12.5,2,8,10,4],[36,20.0,2,8,10,4]]],["2025-06-05",2,1,[[0,55.0,2,8,10,4],[1,35.0,2,8,10,4],[2,23.0,2,8,10,4],[3,19.0,2,8,10,4],[4,10.0,2,8,10,4]]],["2025-06-06",2,0,[[9,10.0,2,8,8,4],[12,7.0,2,8,10,4],[14,8.5,2,8,10,4],[10,16.0,2,8,8,4],[13,3.5,2,8,10,4]]],["2025-06-09",2,1,[[3,20.0,2,8,10,4],[9,10.0,2,8,10,4]]],["2025-06-10",0,1,[[1,35.0,2,8,10,4],[12,7.0,2,8,8,4],[2,23.0,2,8,10,4],[14,8.5,2,8,8,4],[32,25.0,2,10,12,4],[37,8.5,2,8,10,4]]],["2025-06-11",3,1,[[41,60.0,2,8,10,4],[23,28.5,2,8,10,4],[43,25.0,2,8,10,4],[22,40.0,2,8,10,4],[44,12.5,2,8,10,4],[24,24.0,2,8,10,4]]],["2025-06-12",2,1,[[0,50.0,2,8,10,4],[1,30.0,2,8,10,4],[2,23.0,2,8,10,4],[3,19.0,2,8,10,4],[4,11.0,2,10,12,4]]],["2025-06-16",2,1,[[9,10.0,2,8,10,4],[13,4.0,2,8,8,4],[14,8.5,2,8,8,4],[12,7.0,2,8,8,4],[10,16.0,2,8,10,4],[37,9.0,2,8,10,4]]],["2025-06-18",2,1,[[0,50.0,2,8,10,4],[1,30.0,2,8,10,4],[2,23.0,2,8,10,4],[3,19.0,2,8,10,4],[4,11.0,2,10,12,4],[36,20.0,2,10,12,4]]],["2025-06-19",3,1,[[41,60.0,2,8,10,4],[23,28.5,2,8,10,4],[43,25.0,2,8,10,4],[22,40.0,2,8,10,4],[44,10.0,2,8,10,4],[24,25.0,2,8,10,4]]],["2025-06-23",2,1,[[0,50.0,2,8,10,4],[1,30.0,2,8,10,4],[2,24.5,2,8,10,4],[3,19.0,2,8,10,4],[4,12.0,2,8,8,4],[32,25.0,2,8,8,4]]],["2025-06-24",2,0,[[9,15.0,2,8,8,4],[13,4.0,2,8,10,4],[14,8.5,2,8,10,4],[12,7.0,2,8,10,4],[10,16.0,2,8,8,4]]],["2025-06-26",3,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[43,30.0,2,8,10,4],[24,25.0,2,8,10,4],[44,0.0,2,8,10,4],[17,3.0,2,8,8,4],[37,9.0,2,8,10,4]]],["2025-06-27",4,1,[[26,0.0,2,8,10,4],[12,7.0,2,8,8,4],[3,19.0,2,8,10,4],[35,10.0,2,8,8,4],[7,0.0,2,8,10,4]]],["2025-06-30",2,1,[[0,50.0,2,8,10,4],[1,30.0,2,8,10,4],[2,24.5,2,8,10,4],[3,19.0,2,8,10,4],[4,12.0,2,8,8,4],[36,20.0,2,10,12,4]]],["2025-07-01",2,1,[[13,4.0,2,8,10,4],[9,15.0,2,8,10,4],[14,8.5,2,8,8,4],[12,7.0,2,8,8,4],[10,16.0,2,8,10,4],[37,10.0,2,8,8,4]]],["2025-07-04",4,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[26,0.0,2,8,10,4],[7,0.0,2,8,10,4]]],["2025-07-05",3,1,[[41,60.0,2,8,10,4],[22,40.0,2,8,10,4],[43,35.0,2,8,10,4],[24,25.0,2,8,10,4],[44,0.0,2,8,10,4],[17,3.0,2,8,8,4]]],["2025-07-14",2,1,[[0,50.0,2,8,10,4],[1,30.0,2,8,10,4],[2,24.5,2,8,10,4],[3,19.0,2,8,10,4],[4,12.0,2,10,12,4],[36,20.0,2,8,8,4]]],["2025-07-16",2,0,[[13,5.0,2,8,10,4],[9,15.0,2,8,8,4],[14,8.5,2,8,10,4],[10,16.5,2,8,8,4],[12,7.0,2,8,10,4],[37,10.0,2,8,10,4]]],["2025-07-18",3,1,[[42,14.5,2,8,10,4],[22,40.0,2,8,10,4],[43,35.0,2,8,10,4],[24,25.0,2,8,10,4],[44,0.0,2,8,10,4],[17,3.25,2,8,8,4]]],["2025-07-21",0,1,[[1,30.0,2,8,10,4],[9,15.0,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4],[4,12.25,2,10,12,4],[12,7.0,2,8,8,4]]],["2025-07-22",3,1,[[42,15.0,2,8,10,4],[24,27.0,2,8,10,4],[43,35.0,2,8,10,4],[22,40.0,2,8,10,4],[44,0.0,2,8,10,4],[17,3.5,2,8,8,4]]],["2025-07-31",0,1,[[1,30.0,2,8,10,4],[9,15.0,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4],[4,12.5,2,10,12,4],[12,7.0,2,8,8,4]]],["2025-08-01",1,1,[[23,24.0,2,8,10,4],[32,20.0,2,10,12,4],[22,35.0,2,8,10,4],[37,9.5,2,8,8,4],[17,3.5,2,8,8,4],[7,0.0,2,8,10,4]]],["2025-08-04",2,1,[[0,50.0,2,8,10,4],[10,16.5,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[6,20.0,2,10,12,4],[16,3.5,2,8,8,4]]],["2025-08-05",3,1,[[41,60.0,2,8,10,4],[23,12.0,2,8,10,4],[43,35.0,2,8,10,4],[27,7.0,2,10,12,4],[44,0.0,2,8,10,4],[26,0.0,2,8,10,4]]],["2025-08-07",0,1,[[1,35.0,2,8,10,4],[9,15.0,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4],[4,12.5,2,10,12,4],[12,7.0,2,8,8,4]]],["2025-08-08",1,1,[[23,24.0,2,8,10,4],[32,22.0,2,10,12,4],[22,35.0,2,8,10,4],[37,9.5,2,8,8,4],[17,3.5,2,8,8,4],[7,0.0,2,8,10,4]]],["2025-08-11",2,1,[[0,50.0,2,8,10,4],[10,16.5,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[6,20.0,2,10,12,4],[16,3.5,2,8,10,4]]],["2025-08-14",3,1,[[41,60.0,2,8,10,4],[22,35.0,2,8,10,4],[43,35.0,2,8,10,4],[17,4.0,2,8,8,4],[44,0.0,2,8,10,4],[24,27.0,2,8,10,4]]],["2025-08-15",0,1,[[1,35.0,2,8,10,4],[14,8.5,2,8,8,4],[2,24.5,2,8,10,4],[12,7.0,2,8,8,4],[31,20.0,2,8,10,4],[37,9.5,2,8,8,4]]],["2025-08-19",2,1,[[0,50.0,2,8,10,4],[13,5.0,2,8,8,4],[3,19.0,2,8,10,4],[10,16.5,2,8,10,4],[4,12.0,2,10,12,4],[16,3.5,2,8,8,4]]],["2025-08-22",4,1,[[1,35.0,2,8,10,4],[22,35.0,2,8,10,4],[9,15.0,2,8,10,4],[37,9.5,2,8,8,4],[32,22.0,2,10,12,4]]],["2025-08-28",0,1,[[1,35.0,2,8,10,4],[14,8.5,2,8,8,4],[2,24.5,2,8,10,4],[12,7.0,2,8,8,4],[4,12.0,2,10,12,4],[10,16.5,2,8,10,4]]],["2025-09-01",1,1,[[23,24.0,2,8,10,4],[22,35.0,2,8,10,4],[24,27.0,2,8,10,4],[17,4.0,2,8,8,4],[31,20.0,2,8,10,4],[35,10.0,2,8,8,4]]],["2025-09-02",2,0,[[0,50.0,2,8,8,4],[9,15.0,2,8,8,4],[3,19.0,2,8,8,4],[13,5.0,2,8,10,4],[6,20.0,2,8,10,4],[16,3.5,2,8,10,4]]],["2025-09-03",3,1,[[41,60.0,2,8,10,4],[43,35.0,2,8,10,4],[44,10.0,2,8,10,4],[37,9.5,2,8,8,4],[32,22.0,2,10,12,4]]],["2025-09-04",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4],[4,13.0,2,10,12,4],[12,7.0,2,8,8,4]]],["2025-09-08",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[4,13.0,2,10,12,4],[16,4.0,2,8,10,4]]],["2025-09-19",4,1,[[1,35.0,2,8,10,4],[22,35.0,2,8,10,4],[16,4.0,2,8,10,4],[37,9.5,2,8,10,4],[32,22.0,2,8,10,4]]],["2025-09-22",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[4,13.0,2,8,10,4],[16,4.0,2,8,10,4]]],["2025-09-23",1,1,[[23,24.0,2,8,10,4],[22,35.0,2,8,10,4],[24,27.0,2,8,10,4],[17,4.0,2,8,8,4],[31,20.0,2,8,10,4],[35,10.0,2,8,8,4]]],["2025-09-26",4,1,[[1,35.0,2,8,10,4],[22,35.0,2,8,10,4],[12,7.0,2,8,10,4],[43,35.0,2,8,10,3],[32,22.0,2,10,12,4],[37,9.5,2,8,10,4]]],["2025-09-29",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4]]],["2025-10-01",3,1,[[41,60.0,2,8,10,4],[43,30.0,2,8,10,4],[44,10.0,2,8,10,4],[31,20.0,2,8,10,4],[35,10.0,2,8,8,4]]],["2025-10-08",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[4,13.0,2,8,10,4],[16,4.0,2,8,10,4]]],["2025-10-09",1,1,[[22,35.0,2,8,10,4],[23,24.0,2,8,10,4],[24,27.0,2,8,10,4],[17,3.5,2,8,8,4],[35,10.0,2,8,10,4],[31,20.0,2,8,10,4]]],["2025-10-13",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,8,4],[6,20.0,2,8,10,4],[12,7.0,2,8,10,4]]],["2025-10-15",3,1,[[41,60.0,2,8,10,4],[43,30.0,2,8,10,4],[44,10.0,2,10,12,4],[32,23.0,2,10,12,4],[37,9.5,2,8,10,4]]],["2025-10-16",4,1,[[0,50.0,2,8,10,4],[22,35.0,2,8,10,4],[9,15.0,2,8,10,4],[24,27.0,2,8,10,4],[16,4.0,2,10,12,4],[17,3.5,2,8,8,4]]],["2025-10-20",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,10,4],[6,20.0,2,10,12,4],[12,7.0,2,8,10,4]]],["2025-10-22",1,1,[[26,0.0,2,6,8,4],[22,35.0,2,8,10,4],[24,27.0,2,8,10,4],[17,3.0,2,8,8,4],[23,24.0,2,8,10,4]]],["2025-10-23",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,8,4],[4,13.0,2,10,12,4],[16,5.0,2,8,8,4]]],["2025-10-24",3,1,[[41,60.0,2,8,10,4],[43,30.0,2,8,10,4],[44,10.0,2,12,12,4],[31,20.0,2,10,12,4],[37,9.5,2,8,10,4]]],["2025-10-27",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,8,10,4],[6,21.0,2,8,10,4],[12,7.5,2,8,10,4]]],["2025-10-28",1,1,[[23,25.0,2,8,10,4],[22,35.0,2,8,10,4],[24,27.0,2,8,10,4],[17,3.0,2,8,10,4],[32,23.0,2,10,12,4],[35,10.0,2,8,10,4]]],["2025-10-30",2,0,[[0,50.0,2,8,8,4],[9,15.0,2,8,8,4],[3,19.0,2,8,8,4],[13,5.0,2,8,10,4],[4,14.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2025-10-31",3,1,[[41,60.0,2,8,10,4],[43,30.0,2,8,10,4],[44,10.0,2,12,12,4],[31,20.0,2,10,12,4],[37,9.5,2,8,10,4]]],["2025-11-03",0,1,[[1,35.0,2,8,10,4],[10,16.5,2,8,10,4],[2,24.5,2,8,10,4],[14,8.5,2,10,12,4],[6,21.0,2,10,12,4],[12,7.5,2,8,10,4]]],["2025-11-04",1,1,[[23,25.0,2,8,10,4],[22,35.0,2,8,10,4],[24,27.0,2,8,10,4],[17,3.0,2,10,12,4],[31,23.0,2,10,12,4],[35,10.0,2,8,10,4]]],["2025-11-05",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,5.0,2,8,10,4],[4,14.0,2,8,10,4],[16,5.0,2,8,8,4]]],["2025-11-06",3,1,[[41,60.0,2,8,10,4],[43,30.0,2,8,10,4],[44,10.0,2,14,16,4],[32,24.0,2,10,12,4],[37,9.5,2,8,10,4]]],["2025-11-10",0,0,[[1,40.0,2,5,7,4],[10,18.0,2,5,7,4],[2,26.0,2,5,7,4],[14,9.5,2,7,7,4],[6,24.0,2,7,7,4],[12,8.5,2,7,7,4]]],["2025-11-11",1,0,[[22,40.0,2,5,7,4],[23,27.0,2,5,7,4],[24,27.0,2,8,10,4],[17,3.5,2,8,10,4],[32,25.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-11-12",2,0,[[0,55.0,2,5,7,4],[9,20.0,2,5,7,4],[3,21.0,2,5,7,4],[13,5.0,2,8,10,4],[4,14.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2025-11-13",3,0,[[41,65.0,2,5,7,4],[43,35.0,2,5,7,4],[44,12.0,2,10,10,4],[31,20.0,2,8,10,4],[37,9.5,2,8,10,4]]],["2025-11-27",4,2,[[1,30.0,4,8,10,3],[22,30.0,4,8,10,3],[41,45.0,4,8,10,3],[43,25.0,4,8,10,3],[12,6.0,4,8,8,3],[32,18.0,4,8,8,3]]],["2025-11-28",4,2,[[0,40.0,4,8,10,3],[9,15.0,4,8,10,3],[24,20.0,4,8,10,3],[44,8.0,4,8,10,3],[37,7.5,4,8,8,3],[17,2.5,4,8,8,3]]],["2025-12-01",0,0,[[1,40.0,2,5,7,4],[10,18.0,2,5,7,4],[2,26.0,2,5,7,4],[14,9.0,2,8,10,4],[6,22.0,2,8,10,4],[12,8.0,2,8,10,4]]],["2025-12-02",3,0,[[41,65.0,2,5,7,4],[43,35.0,2,5,7,4],[44,15.0,2,10,10,4],[32,25.0,2,8,10,4],[37,9.5,2,8,10,4]]],["2025-12-04",2,0,[[0,55.0,2,5,7,4],[9,20.0,2,5,7,4],[3,22.0,2,5,7,4],[13,5.0,2,8,10,4],[4,14.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2025-12-05",1,0,[[22,45.0,2,5,7,4],[23,27.0,2,5,7,4],[24,27.0,2,10,10,4],[17,3.5,2,8,10,4],[31,20.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-12-11",4,0,[[0,45.0,2,5,7,3],[16,4.0,2,8,10,3],[22,35.0,2,5,7,3],[43,30.0,2,5,7,3],[32,20.0,2,8,10,3],[26,0.0,2,5,7,3]]],["2025-12-15",0,0,[[1,45.0,2,5,7,4],[10,19.0,2,5,7,4],[2,27.0,2,5,7,4],[14,9.0,2,8,10,4],[6,23.0,2,8,10,4],[12,8.0,2,8,10,4]]],["2025-12-16",1,0,[[22,45.0,2,5,7,4],[23,28.0,2,5,7,4],[24,28.0,2,8,10,4],[17,4.0,2,8,10,4],[31,21.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-12-18",2,0,[[0,55.0,2,5,7,4],[9,20.0,2,5,7,4],[3,23.0,2,5,7,4],[13,5.0,2,8,10,4],[4,15.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2025-12-19",3,0,[[41,65.0,2,5,7,4],[43,40.0,2,5,7,4],[44,15.0,2,12,12,4],[32,26.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2025-12-29",0,0,[[1,45.0,2,5,7,4],[10,20.0,2,5,7,4],[2,27.0,2,5,7,4],[14,10.0,2,8,10,4],[6,24.0,2,8,10,4],[12,8.0,2,8,10,4]]],["2025-12-30",1,0,[[22,45.0,2,5,7,4],[23,29.0,2,5,7,4],[24,28.0,2,10,10,4],[17,4.0,2,8,10,4],[32,27.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2026-01-07",2,0,[[0,55.0,2,5,7,4],[9,20.0,2,5,7,4],[3,24.0,2,5,7,4],[13,5.0,2,8,10,4],[4,15.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2026-01-09",3,0,[[41,65.0,2,5,7,4],[43,40.0,2,5,7,4],[44,16.0,2,12,12,4],[31,21.0,2,8,10,4],[37,9.5,2,8,10,4]]],["2026-01-12",0,0,[[1,45.0,2,5,7,4],[10,20.0,2,5,7,4],[2,27.0,2,5,7,4],[14,10.0,2,8,10,4],[6,24.0,2,8,10,4],[12,8.0,2,8,10,4]]],["2026-01-13",1,0,[[22,50.0,2,5,7,4],[23,30.0,2,5,7,4],[24,29.0,2,10,10,4],[17,4.0,2,8,10,4],[32,27.0,2,8,10,4],[35,10.0,2,8,10,4]]],["2026-01-15",2,0,[[0,55.0,2,5,7,4],[9,20.0,2,5,7,4],[3,24.0,2,5,7,4],[13,5.0,2,8,10,4],[4,15.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2026-01-19",0,0,[[1,45.0,2,5,7,4],[10,20.0,2,5,7,4],[2,27.0,2,5,7,4],[14,11.0,2,8,10,4],[6,25.0,2,8,10,4],[12,8.0,2,8,10,4]]],["2026-01-20",1,0,[[22,50.0,2,5,7,4],[23,31.0,2,5,7,4],[24,30.0,2,8,10,4],[17,4.0,2,8,10,4],[31,22.0,2,8,10,4]]],["2026-01-21",2,0,[[0,60.0,2,5,7,4],[9,20.0,2,5,7,4],[3,24.0,2,5,7,4],[13,5.0,2,8,10,4],[4,16.0,2,8,10,4],[16,5.0,2,8,10,4]]],["2026-01-22",3,0,[[41,70.0,2,5,7,4],[43,45.0,2,5,7,4],[44,15.0,2,12,16,4],[32,27.0,2,8,10,4],[37,9.5,2,8,10,4]]],["2026-01-27",0,2,[[1,30.0,4,8,10,3],[10,13.0,4,8,10,3],[2,18.0,4,8,10,3],[14,7.0,4,8,8,3],[6,16.0,4,8,8,3],[12,5.0,4,8,8,3]]],["2026-01-28",1,2,[[22,30.0,4,8,10,3],[23,20.0,4,8,10,3],[24,20.0,4,8,10,3],[17,2.5,4,8,8,3],[32,18.0,4,8,8,3],[35,5.0,4,8,8,3]]],["2026-01-29",2,2,[[0,40.0,4,8,10,3],[9,15.0,4,8,10,3],[3,16.0,4,8,10,3],[13,3.0,4,8,8,3],[4,10.0,4,8,8,3],[16,3.0,4,8,8,3]]],["2026-02-02",0,1,[[1,35.0,2,8,10,4],[10,16.0,2,8,10,4],[2,21.0,2,8,10,4],[14,9.0,2,10,12,4],[6,20.0,2,10,12,4],[12,6.0,2,10,12,4]]],["2026-02-03",1,1,[[22,40.0,2,8,10,4],[23,25.0,2,8,10,4],[24,24.0,2,10,12,4],[17,3.0,2,10,12,4],[32,22.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-02-05",2,1,[[0,45.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[4,13.0,2,10,12,4],[16,4.0,2,10,12,4]]],["2026-02-09",0,1,[[1,35.0,2,8,10,4],[11,7.5,2,8,10,4],[2,21.0,2,8,10,4],[14,9.0,2,10,12,4],[6,20.0,2,10,12,2],[8,0.0,2,10,12,2],[12,6.0,2,10,12,4]]],["2026-02-10",1,1,[[22,30.0,2,8,10,4],[23,26.0,2,8,10,4],[24,24.0,2,12,12,4],[17,3.0,2,10,12,4],[31,18.0,2,10,12,4],[37,7.5,2,10,12,4]]],["2026-02-11",2,1,[[0,45.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[4,14.0,2,10,12,4],[16,4.0,2,10,12,4]]],["2026-02-26",0,2,[[1,30.0,4,8,10,3],[9,10.0,4,8,10,3],[2,18.0,4,8,10,3],[3,16.0,4,8,10,3],[13,3.5,4,10,12,3],[16,3.5,4,10,12,3]]],["2026-02-27",1,2,[[22,25.0,4,8,10,3],[23,22.0,4,8,10,3],[24,20.0,4,8,10,3],[17,2.5,4,10,12,3],[31,15.0,4,10,12,3],[37,6.0,4,10,12,3]]],["2026-03-03",0,1,[[1,35.0,2,8,10,4],[11,8.0,2,8,10,4],[2,22.0,2,8,10,4],[14,9.0,2,10,12,4],[4,14.0,2,10,12,4],[12,6.0,2,10,12,4]]],["2026-03-04",1,1,[[22,35.0,2,8,10,4],[23,26.0,2,8,10,4],[24,25.0,2,12,12,4],[17,3.0,2,10,12,4],[32,22.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-03-05",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[5,8.0,2,10,12,4],[16,5.0,2,10,12,4]]],["2026-03-06",3,1,[[41,60.0,2,8,10,4],[43,35.0,2,8,10,4],[44,15.0,2,10,12,4],[31,18.0,2,10,12,4],[37,7.5,2,10,12,4]]],["2026-03-09",0,1,[[1,35.0,2,8,10,4],[11,9.0,2,8,10,4],[2,22.0,2,8,10,4],[14,9.0,2,10,12,4],[4,15.0,2,10,12,4],[12,6.0,2,10,12,4]]],["2026-03-10",1,1,[[22,35.0,2,8,10,4],[23,27.0,2,8,10,4],[24,26.0,2,12,12,4],[17,3.0,2,10,12,4],[32,23.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-03-11",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[5,9.0,2,10,12,4],[16,5.0,2,10,12,4]]],["2026-03-19",0,1,[[1,40.0,2,8,10,4],[9,15.0,2,8,10,4],[0,40.0,2,8,10,4],[13,4.0,2,10,12,4],[3,19.0,2,8,10,4],[16,5.0,2,10,12,4]]],["2026-03-23",0,1,[[1,40.0,2,8,10,4],[11,10.0,2,8,10,4],[2,23.0,2,8,10,4],[14,10.0,2,10,12,4],[4,15.0,2,10,12,4],[12,6.0,2,10,12,4]]],["2026-03-24",1,1,[[22,35.0,2,8,10,4],[23,28.0,2,8,10,4],[24,27.0,2,10,12,4],[17,3.0,2,10,12,4],[32,23.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-03-26",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[5,10.0,2,10,12,4],[16,4.0,2,10,12,4]]],["2026-03-27",3,1,[[41,60.0,2,8,10,4],[43,35.0,2,8,10,4],[44,15.0,2,12,12,4],[31,18.0,2,10,12,4],[37,7.5,2,10,12,4]]],["2026-03-30",0,1,[[1,40.0,2,8,10,4],[11,11.0,2,8,10,4],[2,23.0,2,8,10,4],[14,10.0,2,10,12,4],[5,11.0,2,10,12,4],[12,6.0,2,10,12,4]]],["2026-03-31",1,1,[[22,35.0,2,8,10,4],[23,28.0,2,8,10,4],[17,3.0,2,10,12,4],[24,27.0,2,12,12,4],[32,24.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-04-02",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[4,15.0,2,10,12,4],[16,4.0,2,10,12,4]]],["2026-04-03",3,1,[[41,60.0,2,8,10,4],[43,35.0,2,8,10,4],[44,15.0,2,12,12,4],[31,19.0,2,10,12,4],[37,7.5,2,10,12,4]]],["2026-04-08",2,1,[[0,50.0,2,8,10,4],[9,15.0,2,8,10,4],[3,19.0,2,8,10,4],[13,4.0,2,10,12,4],[4,16.0,2,10,12,4],[16,4.0,2,10,12,4]]],["2026-04-09",1,1,[[22,35.0,2,8,10,4],[23,29.0,2,8,10,4],[17,3.5,2,10,12,4],[24,28.0,2,12,12,4],[31,20.0,2,10,12,4],[37,8.0,2,10,12,4]]],["2026-04-10",0,1,[[1,40.0,2,8,10,4],[11,11.0,2,8,10,4],[2,25.0,2,8,10,4],[14,11.0,2,10,12,4],[5,12.0,2,10,12,4],[12,7.0,2,10,12,4]]],["2026-04-16",0,1,[[2,25.0,2,8,10,4],[11,12.0,2,8,10,4],[3,20.0,2,8,10,4],[14,12.0,2,10,12,4],[4,16.0,2,10,12,4],[12,7.0,2,10,12,4]]],["2026-04-17",1,1,[[41,65.0,2,8,10,4],[22,40.0,2,8,10,4],[43,35.0,2,8,10,4],[24,29.0,2,10,12,4],[32,24.0,2,10,12,4],[35,10.0,2,10,12,4]]],["2026-04-20",0,1,[[1,40.0,2,8,10,4],[9,15.0,2,8,10,4],[2,26.0,2,8,10,4],[14,12.0,2,10,12,4],[5,12.0,2,10,12,4],[16,5.0,2,10,12,4]]],["2026-04-23",2,1,[[0,55.0,2,8,10,4],[22,40.0,2,8,10,4],[11,13.0,2,8,10,4],[24,29.0,2,12,12,4],[31,21.0,2,10,12,4],[37,8.5,2,10,12,4]]],["2026-04-28",2,1,[[0,55.0,2,8,10,4],[9,20.0,2,8,10,4],[3,21.0,2,8,10,4],[13,5.0,2,10,12,4],[4,17.0,2,10,12,4],[16,6.0,2,10,12,4]]],["2026-04-29",1,1,[[22,45.0,2,8,10,4],[23,30.0,2,8,10,4],[17,3.5,2,10,12,4],[24,30.0,2,12,12,4],[32,24.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-04-30",0,1,[[1,45.0,2,8,10,4],[11,14.0,2,8,10,4],[2,27.0,2,8,10,4],[14,13.0,2,10,12,4],[5,13.0,2,10,12,4],[12,8.0,2,10,12,4]]],["2026-05-04",2,1,[[0,60.0,2,8,10,4],[9,20.0,2,8,10,4],[3,22.0,2,8,10,4],[13,6.0,2,10,12,4],[4,18.0,2,10,12,4],[16,6.0,2,10,12,4]]],["2026-05-06",1,1,[[22,45.0,2,8,10,4],[23,31.0,2,8,10,4],[17,4.0,2,10,12,4],[24,31.0,2,12,12,4],[32,25.0,2,10,12,4],[37,8.5,2,10,12,4]]],["2026-05-07",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,27.0,2,8,10,4],[14,14.0,2,10,12,4],[5,14.0,2,10,12,4],[12,9.0,2,10,12,4]]],["2026-05-11",2,1,[[0,60.0,2,8,10,4],[9,20.0,2,8,10,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-05-12",1,1,[[22,50.0,2,8,10,4],[23,31.0,2,8,10,4],[17,4.0,2,10,12,4],[24,32.0,2,10,12,4],[31,21.0,2,10,12,4],[37,9.0,2,10,12,4]]],["2026-05-13",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,27.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-05-14",3,1,[[41,65.0,2,8,10,4],[43,35.0,2,8,10,4],[44,15.0,2,14,14,4],[32,26.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-05-18",2,1,[[0,60.0,2,8,10,4],[9,20.0,2,8,10,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-05-20",1,1,[[22,50.0,2,8,10,4],[23,32.0,2,8,10,4],[17,4.5,2,10,12,4],[24,32.0,2,10,12,4],[32,27.0,2,10,12,4],[37,9.0,2,10,12,4]]],["2026-05-21",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,27.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-05-22",3,1,[[41,70.0,2,8,10,4],[43,40.0,2,8,10,4],[44,15.0,2,14,16,4],[31,21.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-05-25",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,5,8,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-05-28",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,27.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-06-01",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,5,8,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-06-02",1,1,[[22,50.0,2,8,10,4],[23,32.0,2,8,10,4],[17,4.5,2,10,12,4],[24,32.0,2,10,12,4],[32,27.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-06-04",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,26.5,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-06-08",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,5,8,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-06-09",1,1,[[22,50.0,2,8,10,4],[23,32.0,2,8,10,4],[17,4.5,2,10,12,4],[24,32.0,2,10,12,4],[31,21.0,2,10,12,4],[37,9.0,2,10,12,4]]],["2026-06-11",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-06-13",3,1,[[45,70.0,2,12,12,4],[46,25.0,2,10,12,4],[47,25.0,2,10,12,4],[40,22.5,2,10,12,4],[32,17.5,2,10,12,4]]],["2026-06-15",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,5,8,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-06-16",1,1,[[22,50.0,2,8,10,4],[23,32.0,2,8,10,4],[17,4.5,2,10,12,4],[24,32.0,2,10,12,4],[32,27.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-06-18",0,1,[[1,45.0,2,8,10,4],[11,15.0,2,8,10,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-06-20",3,1,[[45,70.0,2,12,12,4],[46,30.0,2,10,12,4],[47,25.0,2,10,12,4],[36,22.5,2,10,12,4],[32,17.5,2,10,12,4]]],["2026-06-22",4,1,[[2,26.0,2,10,12,4],[11,15.0,2,8,12,4],[24,32.0,2,10,12,4],[43,40.0,2,8,10,4],[37,9.0,2,10,12,4]]],["2026-06-30",4,2,[[2,26.0,4,8,10,4],[3,23.0,4,8,10,4],[12,10.0,4,8,10,4],[11,15.0,4,8,10,4],[4,19.0,4,10,12,4]]],["2026-07-02",4,2,[[22,50.0,4,8,10,4],[24,32.0,4,10,12,4],[17,4.5,4,10,12,4],[31,21.0,4,10,12,4],[37,9.0,4,10,12,4]]],["2026-07-03",4,2,[[0,50.0,4,8,10,4],[9,20.0,4,5,8,4],[1,35.0,4,8,10,4],[14,12.5,4,10,12,4],[13,6.0,4,10,12,4]]],["2026-07-04",3,1,[[46,35.0,2,10,12,4],[47,25.0,2,10,12,4],[45,60.0,2,12,12,4],[40,25.0,2,10,12,4],[33,25.0,2,10,12,4]]],["2026-07-06",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,6,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-07-07",1,1,[[22,50.0,2,6,8,4],[23,32.0,2,8,10,4],[24,32.0,2,10,12,4],[17,4.5,2,10,12,4],[31,21.0,2,10,12,4],[37,9.0,2,10,12,4]]],["2026-07-09",0,1,[[1,45.0,2,6,8,4],[11,15.0,2,6,8,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-07-11",3,1,[[45,60.0,2,12,12,4],[46,35.0,2,10,12,4],[47,32.5,2,10,12,4],[40,27.5,2,10,12,4],[33,25.0,2,10,12,4]]],["2026-07-13",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,6,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-07-14",1,1,[[22,50.0,2,8,10,4],[23,33.0,2,8,10,4],[24,32.0,2,10,12,4],[17,4.5,2,10,12,4],[37,9.0,2,10,12,4],[32,27.0,2,10,12,4]]],["2026-07-16",0,1,[[1,45.0,2,6,8,4],[11,15.0,2,8,10,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-07-18",3,1,[[45,70.0,2,12,12,4],[46,35.0,2,10,12,4],[47,32.5,2,10,12,4],[40,20.0,2,10,12,4],[33,30.0,2,10,12,4],[25,60.0,2,10,12,4]]],["2026-07-20",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,6,4],[3,23.0,2,8,10,4],[13,6.0,2,10,12,4],[4,19.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-07-21",1,1,[[22,50.0,2,8,10,4],[28,30.0,2,10,12,4],[24,32.0,2,10,12,4],[17,4.5,2,10,12,4],[31,21.0,2,10,12,4],[37,9.0,2,10,12,4]]],["2026-07-23",0,1,[[1,45.0,2,6,8,4],[11,15.5,2,6,8,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-07-25",3,1,[[45,80.0,2,12,12,4],[46,40.0,2,10,12,4],[47,35.0,2,10,12,4],[40,20.0,2,10,12,4],[33,30.0,2,10,12,4],[30,45.0,2,12,12,4]]],["2026-07-27",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,8,4],[3,24.0,2,8,10,4],[13,6.0,2,10,12,4],[4,20.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-07-28",1,1,[[22,50.0,2,8,10,4],[28,30.0,2,10,12,4],[24,32.0,2,10,12,4],[17,5.0,2,10,12,4],[32,27.0,2,10,12,4],[37,10.0,2,10,12,4]]],["2026-08-03",0,1,[[1,45.0,2,6,8,4],[11,15.5,2,8,10,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[5,15.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-08-04",1,1,[[22,50.0,2,8,10,4],[28,30.0,2,10,12,4],[24,32.0,2,10,12,4],[17,5.0,2,10,12,4],[31,22.0,2,10,12,4],[37,10.0,2,10,12,4]]],["2026-08-06",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,8,4],[3,24.5,2,8,10,4],[13,6.0,2,10,12,4],[4,20.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-08-08",3,1,[[45,90.0,2,10,12,4],[46,40.0,2,10,12,4],[47,35.0,2,10,12,4],[40,20.0,2,10,12,4],[33,35.0,2,10,12,4],[25,55.0,2,10,12,4]]],["2026-08-12",2,1,[[0,60.0,2,6,8,4],[9,25.0,2,6,8,4],[1,45.0,2,6,8,4],[14,15.0,2,10,12,4],[4,20.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-08-13",1,1,[[28,30.0,2,12,12,4],[22,50.0,2,8,10,4],[24,32.0,2,10,12,4],[17,5.0,2,10,12,4],[31,22.0,2,10,12,4],[37,10.0,2,10,12,4]]],["2026-08-15",3,1,[[45,90.0,2,12,12,4],[46,40.0,2,10,12,4],[47,35.0,2,10,12,4],[40,22.5,2,10,12,4],[33,37.5,2,10,12,4],[30,45.0,2,12,12,4],[20,20.0,2,10,12,4]]],["2026-08-17",0,1,[[1,45.0,2,8,10,4],[11,16.0,2,8,10,4],[2,26.0,2,8,10,4],[14,15.0,2,10,12,4],[6,20.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-08-18",1,1,[[28,35.0,2,12,12,4],[22,50.0,2,8,10,4],[24,32.0,2,10,12,4],[17,5.0,2,10,12,4],[31,22.0,2,10,12,4],[37,10.0,2,10,12,4]]],["2026-08-19",3,1,[[45,100.0,2,8,10,4],[46,40.0,2,10,12,4],[47,35.0,2,10,12,4],[48,15.0,2,10,12,4],[25,60.0,2,12,12,4]]],["2026-08-20",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,6,8,4],[3,25.0,2,8,10,4],[13,6.0,2,10,12,4],[4,20.0,2,10,12,4],[16,7.0,2,10,12,4]]],["2026-08-22",3,1,[[45,100.0,2,10,12,4],[46,42.5,2,10,12,4],[47,35.0,2,10,12,4],[40,25.0,2,10,12,4],[25,60.0,2,10,12,4],[33,40.0,2,10,12,4]]],["2026-08-24",0,1,[[1,45.0,2,8,10,4],[11,16.0,2,8,10,4],[2,27.0,2,8,10,4],[14,17.0,2,10,12,4],[6,20.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-08-25",1,1,[[22,50.0,2,8,10,4],[23,33.0,2,8,10,4],[24,32.0,2,12,12,4],[17,6.0,2,10,12,4],[32,27.0,2,10,12,4],[35,15.0,2,10,12,4]]],["2026-08-29",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,6,8,4],[3,25.0,2,8,10,4],[9,40.0,2,10,12,4],[20,20.0,2,10,12,4]]],["2026-08-31",0,1,[[1,45.0,2,8,10,4],[11,16.0,2,8,10,4],[2,27.0,2,8,10,4],[14,17.0,2,10,12,4],[6,25.0,2,10,12,4],[12,10.0,2,10,12,4]]],["2026-09-01",1,1,[[22,55.0,2,8,10,4],[23,33.0,2,8,10,4],[24,33.0,2,10,12,4],[17,6.0,2,10,12,4],[31,23.0,2,10,12,4],[37,10.0,2,10,12,4]]],["2026-09-02",2,1,[[0,60.0,2,8,10,4],[9,25.0,2,8,10,4],[3,26.0,2,6,8,4],[13,6.0,2,10,12,4],[4,20.0,2,10,12,4],[16,8.0,2,10,12,4]]],["2026-09-09",0,0,[[1,50.0,2,5,7,4],[11,17.0,2,5,7,4],[2,27.0,2,5,7,4],[14,17.0,2,8,10,4],[6,25.0,2,8,10,4],[12,10.0,2,8,10,4]]],["2026-09-10",1,0,[[22,60.0,2,5,7,4],[24,35.0,2,5,7,4],[23,33.0,2,5,7,4],[17,6.0,2,8,10,4],[31,23.0,2,8,10,4],[37,10.0,2,8,10,4]]],["2026-09-14",2,0,[[0,65.0,2,5,7,4],[9,30.0,2,5,7,4],[3,27.0,2,5,7,4],[13,7.0,2,8,10,4],[4,21.0,2,8,10,4],[16,9.0,2,8,10,4]]],["2026-09-15",1,0,[[22,60.0,2,5,7,4],[24,35.0,2,5,7,4],[23,34.0,2,5,7,4],[17,7.0,2,8,10,4],[31,24.0,2,8,10,4],[37,11.0,2,8,10,4]]]],"PROG":[{"id":"push1","name":"Push 1","focus":"Incline-led chest, delts, triceps","from":"2026-09-09","ex":[["incline-bench-press",4],["db-arnold-press",4],["db-bench-press",4],["z-bar-straight-lift",4],["bench-pullover",4],["db-shoulder-opener",4]]},{"id":"pull","name":"Pull","focus":"Back, rear delts, arms","from":"2026-09-15","ex":[["bb-row",4],["standing-lat-pulldown",4],["db-bench-row",4],["db-laid-flye",4],["z-bar-tricep-press",4],["incline-db-curl",4]]},{"id":"push2","name":"Push 2","focus":"Flat-bench chest, shoulders, triceps","from":"2026-09-14","ex":[["bench-press",4],["bb-standing-shoulder-press",4],["db-incline-bench-press",4],["total-lateral-raise",4],["db-chest-opener",4],["db-seated-t-shape",4]]},{"id":"legs","name":"Legs","focus":"Quads, hamstrings, arms","from":"2026-08-22","ex":[["leg-press",4],["quad-extension",4],["prone-leg-curl",4],["arm-curl",4],["lat-machine",4],["arm-extension",4]]}]};
+
+const LIB = SEED.EX.map(function(r){
+  return { id:r[0], name:r[1], muscle:SEED.MUS[r[2]], load:r[3] ? 'lower' : 'upper',
+           comp:!!r[4], secondary:r[5].map(function(i){ return SEED.MUS[i]; }) };
+});
+const LIB_BY_NAME = {}, LIB_BY_ID = {};
+LIB.forEach(function(e){ LIB_BY_NAME[e.name] = e; LIB_BY_ID[e.id] = e; });
+
+function mkExId(id, sets){
+  const b = LIB_BY_ID[id];
+  if(!b) throw new Error('unknown exercise id: ' + id);
+  return { id:b.id, name:b.name, muscle:b.muscle, load:b.load, comp:b.comp,
+           secondary:b.secondary, sets:sets };
+}
+function mkEx(name, sets){ return mkExId(LIB_BY_NAME[name].id, sets); }
+
+const DAY_IDS   = ['push1','pull','push2','legs','mix'];
+const DAY_NAMES = ['Push 1','Pull','Push 2','Legs','Mix'];
+const PHASE_IDS = ['strength','hypertrophy','deload'];
+
+/** Expand the packed archive into full session records. */
+function expandArchive(){
+  return SEED.ARCH.map(function(a){
+    const di = a[1];
+    return {
+      id:'h' + a[0] + '-' + DAY_IDS[di], date:a[0], dayId:DAY_IDS[di],
+      dayName:DAY_NAMES[di], phase:PHASE_IDS[a[2]], week:1, block:0,
+      entries:a[3].map(function(e){
+        const ex = LIB[e[0]], w = e[1], rir = e[2], lo = e[3], hi = e[4];
+        const sets = [];
+        for(let i = 0; i < e[5]; i++)
+          sets.push({ w:w, reps:Math.max(lo, hi - i), rir:rir, done:true });
+        return { exId:ex.id, name:ex.name, muscle:ex.muscle,
+                 secondary:ex.secondary, range:[lo, hi], sets:sets };
+      }),
+      feedback:{}, duration:0, notes:'', arch:true, updatedAt:0
+    };
+  }).sort(function(x, y){ return x.date < y.date ? 1 : -1; });
+}
+
+/* ---------- 3. Default program ------------------------------------------- */
+
+function defaultProgram(){
+  return { days: SEED.PROG.map(function(p){
+    return { id:p.id, name:p.name, focus:p.focus,
+             exercises: p.ex.map(function(e){ return mkExId(e[0], e[1]); }) };
+  })};
+}
+
+function defaultState(){
+  return {
+    v:1,
+    settings:{ units:'kg', incUpper:2.5, incLower:5, rest:60, autoreg:true, theme:'dark' },
+    meso:{
+      blocks:[ {type:'strength',weeks:5}, {type:'deload',weeks:1},
+               {type:'hypertrophy',weeks:6}, {type:'deload',weeks:1} ],
+      cursor:{ block:0, week:2, day:0 },
+      cycle:1
+    },
+    program: defaultProgram(),
+    sessions: [],
+    bodyweight: [],
+    volAdj: {},
+    seen: {},
+    build: BUILD,
+    tweaks: TWEAKS,
+    ui:{ tab:'today' }
+  };
+}
+
+/* ---------- 4. State, persistence, sync ---------------------------------- */
+
+const LS_KEY = 'ironledger.v1';
+const BUILD = '2026-09-16-archive';
+const TWEAKS = 'rest60';
+let S = null;
+let DB = null;
+let dbStatus = 'local';
+const dirtySessions = new Set();
+let configDirty = false;
+
+function load(){
+  let raw = null;
+  try { raw = localStorage.getItem(LS_KEY); } catch(e){}
+  if(raw){
+    try {
+      const p = JSON.parse(raw);
+      if(p && p.v === 1){ S = p; migrate(); adoptArchive(); applyTweaks(); return; }
+    } catch(e){}
+  }
+  S = defaultState();
+  S.sessions = expandArchive();
+}
+
+/** Small one-off settings corrections, independent of the archive migration. */
+function applyTweaks(){
+  if(S.tweaks === TWEAKS) return;
+  if(S.settings.rest === 150) S.settings.rest = 60;   // shipped default -> his actual rest
+  S.tweaks = TWEAKS;
+  configDirty = true;
+}
+
+/**
+ * The written-log archive ships inside the app. A state saved before it existed
+ * (or by any earlier build) has to take it on — without disturbing anything
+ * logged since. Runs once; the build stamp makes it idempotent.
+ */
+function adoptArchive(){
+  S.sessions = (S.sessions || []).filter(function(x){ return !x.sample; });
+  if(S.build === BUILD) return;
+  const mine = S.sessions.filter(function(x){ return !x.arch; });
+  S.sessions = expandArchive().concat(mine)
+    .sort(function(a, b){ return a.date < b.date ? 1 : -1; });
+  const d = defaultState();
+  S.program = d.program;
+  S.meso = d.meso;
+  S.volAdj = {};
+  S.build = BUILD;
+  configDirty = true;
+}
+function migrate(){
+  const d = defaultState();
+  S.settings = Object.assign({}, d.settings, S.settings||{});
+  S.meso = Object.assign({}, d.meso, S.meso||{});
+  S.ui = S.ui || {tab:'today'};
+  S.volAdj = S.volAdj || {};
+  S.seen = S.seen || {};
+  S.bodyweight = S.bodyweight || [];
+  S.sessions = S.sessions || [];
+}
+let saveTimer = null;
+function save(opts){
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e){}
+  if(opts && opts.config) configDirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushRemote, 1200);
+}
+
+/* ---- remote mirror (claude db capability) ---- */
+async function initRemote(){
+  if(typeof window.claude === 'undefined' || !window.claude.use) return;
+  let db = null;
+  try { db = await window.claude.use('db'); } catch(e){ return; }
+  if(!db) return;
+  DB = db;
+  try {
+    const cfg = await DB.doc('app/config').get();
+    if(cfg.exists){
+      const r = cfg.data();
+      if(r.build === BUILD && (r.updatedAt||0) > (S.configUpdatedAt||0)){
+        S.settings = Object.assign(S.settings, r.settings||{});
+        S.meso = r.meso || S.meso;
+        S.program = r.program || S.program;
+        S.volAdj = r.volAdj || S.volAdj;
+        S.bodyweight = r.bodyweight || S.bodyweight;
+        S.seen = r.seen || S.seen;
+        S.configUpdatedAt = r.updatedAt;
+
+      }
+    }
+    const snap = await DB.collection('sessions').orderBy('date','desc').limit(400).get();
+    if(snap.size > 0){
+      const byId = {};
+      S.sessions.forEach(function(x){ byId[x.id] = x; });
+      snap.docs.forEach(function(d){
+        const r = d.data();
+        if(r.sample) return;
+        const local = byId[d.id];
+        if(!local || (r.updatedAt||0) >= (local.updatedAt||0)) byId[d.id] = r;
+      });
+      S.sessions = Object.keys(byId).map(function(k){ return byId[k]; })
+        .sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+    }
+    dbStatus = 'synced';
+    try { localStorage.setItem(LS_KEY, JSON.stringify(S)); } catch(e){}
+    render();
+    pushRemote();
+  } catch(e){ dbStatus = 'local'; }
+}
+async function pushRemote(){
+  if(!DB) return;
+  try {
+    if(configDirty){
+      configDirty = false;
+      S.configUpdatedAt = Date.now();
+      await DB.doc('app/config').set({
+        settings:S.settings, meso:S.meso, program:S.program, volAdj:S.volAdj,
+        bodyweight:S.bodyweight, seen:S.seen, sessionCount:S.sessions.length,
+        build:BUILD, updatedAt:S.configUpdatedAt
+      });
+    }
+    const ids = Array.from(dirtySessions); dirtySessions.clear();
+    for(const id of ids){
+      const s = S.sessions.find(function(x){ return x.id === id; });
+      if(s && !s.arch) await DB.doc('sessions/' + id).set(s);
+      else await DB.doc('sessions/' + id).delete().catch(function(){});
+    }
+  } catch(e){ /* stay local; retry on next save */ }
+}
+
+/* ---------- 5. Units & maths --------------------------------------------- */
+
+const U = function(){ return S.settings.units; };
+function inc(ex){
+  const kg = ex.load === 'lower' ? S.settings.incLower : S.settings.incUpper;
+  return U() === 'kg' ? kg : Math.round(kg * 2.2046 / 2.5) * 2.5;
+}
+function grid(){ return U() === 'kg' ? 1.25 : 2.5; }
+function roundLoad(x){ const g = grid(); return Math.max(0, Math.round(x / g) * g); }
+function fmtW(x){
+  if(x === null || x === undefined) return '—';
+  return (Math.round(x * 100) / 100).toString().replace(/\.00$/,'').replace(/(\.\d)0$/,'$1');
+}
+// Epley, adjusted so reps-in-reserve count as reps not performed.
+function e1rm(w, reps, rir){
+  const eff = reps + (rir || 0);
+  if(!w || !reps || eff > 14) return 0;
+  return w * (1 + eff / 30);
+}
+function loadForReps(oneRM, reps, rir){
+  const eff = reps + (rir || 0);
+  return oneRM / (1 + eff / 30);
+}
+
+/* ---------- 6. Mesocycle cursor ------------------------------------------ */
+
+function blocks(){ return S.meso.blocks; }
+function curBlock(){ return blocks()[S.meso.cursor.block] || blocks()[0]; }
+function curPhase(){ return curBlock().type; }
+function curWeek(){ return S.meso.cursor.week; }
+function curDay(){ return S.program.days[S.meso.cursor.day % S.program.days.length]; }
+function targetRir(phase, week){
+  const arr = PHASE[phase].rirByWeek;
+  return arr[Math.min(week - 1, arr.length - 1)];
+}
+function repRange(ex, phase){ return ex.comp ? PHASE[phase].comp : PHASE[phase].iso; }
+
+function setsFor(ex, phase, week){
+  const base = ex.sets;
+  if(phase === 'deload') return Math.max(1, Math.ceil(base / 2));
+  if(phase === 'strength') return base;
+  // hypertrophy: schedule ramp + autoregulated adjustment, capped by MRV headroom
+  const ramp = Math.min(Math.floor((week - 1) / 2), 2);
+  const adj = clamp(S.volAdj[ex.muscle] || 0, -2, 3);
+  return clamp(base + ramp + adj, 1, base + 4);
+}
+function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+
+function advanceCursor(){
+  const c = S.meso.cursor;
+  c.day += 1;
+  if(c.day >= S.program.days.length){
+    c.day = 0;
+    c.week += 1;
+    const b = blocks()[c.block];
+    if(c.week > b.weeks){
+      c.week = 1;
+      c.block += 1;
+      if(c.block >= blocks().length){ c.block = 0; S.meso.cycle += 1; }
+      S.volAdj = {}; // volume ramp restarts each block
+    }
+  }
+}
+function weekTimeline(){
+  const out = []; let i = 0;
+  blocks().forEach(function(b, bi){
+    for(let w = 1; w <= b.weeks; w++){
+      out.push({ i:i++, block:bi, week:w, type:b.type,
+                 now: bi === S.meso.cursor.block && w === S.meso.cursor.week });
+    }
+  });
+  return out;
+}
+
+/* ---------- 7. History & prescription ------------------------------------ */
+
+function history(exId, opts){
+  const skipDeload = !opts || opts.skipDeload !== false;
+  return S.sessions.filter(function(s){
+    if(skipDeload && s.phase === 'deload') return false;
+    return s.entries.some(function(e){
+      return e.exId === exId && e.sets.some(function(st){ return st.done; });
+    });
+  }).map(function(s){
+    const e = s.entries.find(function(x){ return x.exId === exId; });
+    const sets = e.sets.filter(function(st){ return st.done && st.reps > 0; });
+    return { date:s.date, phase:s.phase, week:s.week, sets:sets,
+             load: sets.length ? Math.max.apply(null, sets.map(function(x){ return x.w; })) : 0,
+             range: e.range || null };
+  }).sort(function(a,b){ return a.date < b.date ? 1 : -1; });
+}
+
+function bestE1rm(exId){
+  let best = 0, when = null;
+  S.sessions.forEach(function(s){
+    s.entries.forEach(function(e){
+      if(e.exId !== exId) return;
+      e.sets.forEach(function(st){
+        if(!st.done) return;
+        const v = e1rm(st.w, st.reps, st.rir);
+        if(v > best){ best = v; when = s.date; }
+      });
+    });
+  });
+  return { value:best, date:when };
+}
+
+/**
+ * Decide the load, and say why.
+ * Within a block: double progression — clear every set at the top of the
+ * range inside the RIR target and the load goes up.
+ * Across a block boundary the rep range changes, so re-anchor from e1RM.
+ */
+function prescribe(ex, phase, week){
+  const range = repRange(ex, phase);
+  const rir = targetRir(phase, week);
+  const hist = history(ex.id);
+  const step = inc(ex);
+
+  if(!hist.length){
+    const any = history(ex.id, {skipDeload:false});
+    if(!any.length){
+      return { load:null, range:range, rir:rir, sets:setsFor(ex, phase, week),
+               why:'First time logging this. Pick a weight you could do ' + range[1] +
+                   ' reps with and still leave ' + rir + ' in the tank.', tone:'' };
+    }
+  }
+  const last = hist[0];
+  const prevRange = last.range;
+  const rangeChanged = prevRange && Math.abs(prevRange[1] - range[1]) >= 2;
+
+  let load, why = '', tone = '';
+
+  if(rangeChanged){
+    const best = bestE1rm(ex.id).value;
+    const anchor = best || e1rm(last.load, last.sets[0].reps, last.sets[0].rir);
+    const raw = loadForReps(anchor, range[0], rir);
+    const capped = clamp(raw, last.load * 0.88, last.load * 1.12);
+    load = roundLoad(capped);
+    why = 'New block, new rep range (' + prevRange[0] + '–' + prevRange[1] + ' → ' +
+          range[0] + '–' + range[1] + '). Re-anchored off your best estimated 1RM of ' +
+          fmtW(anchor) + ' ' + U() +
+          (capped !== raw ? ', held to a 12% step from last time.' : '.');
+    tone = '';
+  } else {
+    const topHit = last.sets.length > 0 && last.sets.every(function(st){
+      return st.reps >= range[1] && st.rir <= targetRir(last.phase, last.week);
+    });
+    const anyShort = last.sets.some(function(st){ return st.reps < range[0]; });
+    const twoShort = hist.length > 1 && anyShort &&
+      hist[1].sets.some(function(st){ return st.reps < range[0]; });
+
+    if(topHit){
+      load = roundLoad(last.load + step);
+      why = 'You cleared ' + range[1] + ' on every set last time at or under target RIR. ' +
+            'Up ' + fmtW(step) + ' ' + U() + ' — reps will drop back toward ' + range[0] + '.';
+      tone = 'hit';
+    } else if(twoShort){
+      load = Math.floor(last.load * 0.93 / grid()) * grid();
+      why = 'Two sessions under ' + range[0] + ' reps. Backing off ~7% to get back inside the range.';
+      tone = 'warn';
+    } else if(anyShort){
+      load = last.load;
+      why = 'A set fell under ' + range[0] + ' reps. Hold ' + fmtW(last.load) + ' ' + U() +
+            ' and win the reps back.';
+      tone = 'warn';
+    } else {
+      load = last.load;
+      const need = last.sets.filter(function(st){ return st.reps < range[1]; }).length;
+      why = 'Same load. ' + need + ' set' + (need === 1 ? '' : 's') + ' still short of ' +
+            range[1] + ' — add reps there, then the weight goes up.';
+      tone = '';
+    }
+    // stall check
+    if(hist.length >= 3){
+      const same = hist[0].load === hist[1].load && hist[1].load === hist[2].load;
+      const flat = totalReps(hist[0]) <= totalReps(hist[1]) && totalReps(hist[1]) <= totalReps(hist[2]);
+      if(same && flat && phase !== 'deload'){
+        why = 'Stalled: three sessions at ' + fmtW(last.load) + ' ' + U() +
+              ' with no rep gain. Check sleep and calories first, then consider swapping ' +
+              'this movement at the next block.';
+        tone = 'warn';
+      }
+    }
+  }
+
+  // A layoff resets readiness regardless of what the rep maths says.
+  if(load !== null && last){
+    const gap = Math.round((Date.now() - new Date(last.date + 'T12:00:00')) / 86400000);
+    if(gap > 42){
+      const g = grid();
+      load = Math.min(load, Math.floor(last.load * 0.9 / g) * g);
+      why = Math.round(gap / 7) + ' weeks since you last did this. Opening 10% under ' +
+            'your old working load — get the pattern back, then climb.';
+      tone = 'warn';
+    } else if(gap > 21){
+      load = Math.min(load, last.load);
+      why = Math.round(gap / 7) + ' weeks since you last did this. Holding ' +
+            fmtW(last.load) + ' ' + U() + ' rather than adding — earn the increase again.';
+      tone = 'warn';
+    }
+  }
+
+  if(phase === 'deload'){
+    const base = load || 0;
+    load = Math.floor(base * 0.65 / grid()) * grid();
+    why = 'Deload — ~65% of working load, half the sets, ' + rir + ' reps in reserve. ' +
+          'The point is to arrive at the next block fresh.';
+    tone = 'warn';
+  }
+  return { load:load, range:range, rir:rir, sets:setsFor(ex, phase, week), why:why, tone:tone };
+}
+function totalReps(h){ return h.sets.reduce(function(a,b){ return a + b.reps; }, 0); }
+
+/* ---------- 8. Volume autoregulation (RP feedback table) ----------------- */
+// soreness 0 none / 1 little / 2 lots / 3 still sore
+// pump 0 low / 1 moderate / 2 high ; perf 0 down / 1 same / 2 up
+function setDelta(f){
+  if(f.sore === 3) return -1;
+  if(f.sore === 2) return 0;
+  let d;
+  if(f.sore === 0) d = f.pump === 0 ? 3 : f.pump === 1 ? 2 : 1;
+  else d = f.pump === 0 ? 2 : f.pump === 1 ? 1 : 1;
+  if(f.perf === 0) d -= 1;
+  return clamp(d - 1, -1, 2); // scale to per-session set change
+}
+function applyFeedback(fb){
+  Object.keys(fb || {}).forEach(function(m){
+    const d = setDelta(fb[m]);
+    S.volAdj[m] = clamp((S.volAdj[m] || 0) + d, -2, 3);
+  });
+}
+
+/* ---------- 9. Weekly volume -------------------------------------------- */
+
+function isoOffset(n){
+  const d = new Date(); d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function weekKey(dateStr){
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0,10);
+}
+function volumeByMuscle(weeksBack){
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 7 * (weeksBack || 1));
+  const iso = cutoff.toISOString().slice(0,10);
+  const out = {};
+  S.sessions.forEach(function(s){
+    if(s.date < iso) return;
+    s.entries.forEach(function(e){
+      const n = e.sets.filter(function(st){ return st.done; }).length;
+      if(!n) return;
+      out[e.muscle] = (out[e.muscle] || 0) + n;
+      (e.secondary || []).forEach(function(m){ out[m] = (out[m] || 0) + n * 0.5; });
+    });
+  });
+  return out;
+}
+
+/* ---------- 10. Curated feed -------------------------------------------- */
+
+const FEED = [
+  { id:'rir-ramp', cat:'Training', tier:'moderate', src:'Israetel — RP mesocycle design',
+    t:'Start a block further from failure than feels right',
+    take:'Week 1 at 3 reps in reserve is not a wasted week. It is the week that lets weeks 4 and 5 exist.',
+    body:'<p>Fatigue accumulates faster than you notice. If week 1 is already an all-out grind, there is nowhere left to progress — you spend the rest of the block digging out instead of adding load.</p><p>The ramp your app uses: <strong>3 → 2 → 2 → 1 → 0</strong> RIR across a hypertrophy block, <strong>2 → 2 → 1 → 0</strong> across a strength block. The last week should be genuinely hard. The first should not.</p><p>A practical check: if you cannot clearly name how many more reps you had left, you are probably closer to failure than you think. Most lifters under-report RIR by one to two reps.</p>' },
+
+  { id:'double-prog', cat:'Training', tier:'strong', src:'Matthews — Bigger Leaner Stronger',
+    t:'Double progression is the whole engine',
+    take:'Work inside a rep range. Hit the top of it on every set, then add weight. Repeat forever.',
+    body:'<p>Pick a range — say 6–10. Load it so you get about 6. Each session, chase reps. When every working set reaches 10 within your RIR target, add <strong>2.5 kg upper / 5 kg lower</strong> and you drop back to around 6.</p><p>This is what your app is doing every time it says "up 2.5" or "same load, win the reps back". It removes the daily judgement call: the numbers decide.</p><p>The one rule people break: they add weight when the <em>first</em> set hits the top of the range. Every working set has to get there.</p>' },
+
+  { id:'creatine', cat:'Supplements', tier:'strong', src:'Kreider et al., JISSN position stand',
+    t:'Creatine monohydrate, 3–5 g, every day',
+    take:'The most replicated ergogenic aid in sports nutrition, and the cheapest thing in the cupboard.',
+    body:'<p>Roughly 1–3 kg of extra lean mass and meaningful strength gains over the first months of training, across hundreds of trials. Monohydrate is the studied form — HCl, buffered and liquid versions cost more and have no demonstrated advantage.</p><ul><li><strong>Dose:</strong> 3–5 g daily. Loading at 20 g/day for 5 days saturates faster but is not necessary.</li><li><strong>Timing:</strong> irrelevant. Take it whenever you will remember.</li><li><strong>Water weight:</strong> 1–2 kg of intracellular water in the first weeks. That is the mechanism, not a side effect.</li><li>No evidence of kidney harm in healthy people; the creatinine reading on a blood panel rises without indicating damage.</li></ul>' },
+
+  { id:'bcaa', cat:'Supplements', tier:'none', src:'Wolfe, JISSN 2017',
+    t:'Skip BCAAs if you eat enough protein',
+    take:'Isolated branched-chain amino acids cannot build muscle without the other six essential ones.',
+    body:'<p>Muscle protein synthesis needs all nine essential amino acids. Supplying three of them in isolation raises their blood levels and does very little else. Any study showing a benefit is almost always in a low-protein or fasted population.</p><p>If you are hitting roughly 1.6–2.2 g of protein per kg of bodyweight, whole protein already contains far more leucine than a BCAA scoop. Spend the money on whey or on food.</p>' },
+
+  { id:'protein', cat:'Nutrition', tier:'strong', src:'Morton et al., BJSM 2018 meta-analysis',
+    t:'1.6 g of protein per kg is where the curve flattens',
+    take:'More than about 2.2 g/kg has not been shown to add anything. Less than 1.6 leaves gains behind.',
+    body:'<p>The meta-analysis of 49 studies found benefits plateauing around <strong>1.6 g/kg/day</strong>, with the confidence interval reaching to 2.2. For an 80 kg lifter that is roughly 130–175 g.</p><p>Distribution matters less than people claim, but 3–5 feedings of 0.4 g/kg each is a reasonable default. In a calorie deficit, push toward the top of the range — protein is protective of lean mass when energy is short.</p>' },
+
+  { id:'deload-why', cat:'Training', tier:'moderate', src:'Israetel — fatigue management',
+    t:'A deload is a training week, not a week off',
+    take:'Half the sets, about 65% of the load, technique unchanged. You should leave it itching to lift.',
+    body:'<p>Fatigue masks fitness. After four to six hard weeks your performance understates your actual capacity — you are strong but buried. A deload strips the fatigue while keeping the movement pattern and most of the adaptation.</p><p>Signs you needed one and pushed through anyway: joints aching before the muscle does, sleep getting worse, warm-up weights feeling heavy, motivation gone flat.</p><p>Complete rest works too but costs more re-adaptation. Half-volume at reduced load is the better trade for most people.</p>' },
+
+  { id:'caffeine', cat:'Supplements', tier:'strong', src:'Grgic et al., BJSM 2020 umbrella review',
+    t:'Caffeine works — 3–6 mg/kg, 45–60 min before',
+    take:'Small but real improvements in strength, power and endurance. Tolerance to the ergogenic effect is limited.',
+    body:'<p>For an 80 kg lifter, 240–480 mg. Most of the benefit shows up at the lower end; higher doses mainly add jitters and heart-rate.</p><p>Two practical cautions: caffeine has a half-life of roughly five hours, so an evening session can cost you sleep — and sleep is worth more than the lift. And if you use it every single day, keep the dose stable rather than escalating.</p>' },
+
+  { id:'stretch-rom', cat:'Training', tier:'moderate', src:'Israetel; Pedrosa et al. 2022',
+    t:'Load the stretched position',
+    take:'Partial reps at long muscle lengths beat partials at short ones — and full ROM beats most partials.',
+    body:'<p>A growing body of work suggests that the lengthened portion of a rep does disproportionate work for hypertrophy. Practical consequences:</p><ul><li>Deep stretch on incline curls, overhead triceps extensions, RDLs, seated leg curls, and flyes.</li><li>Control the eccentric — do not drop into the stretch, arrive at it.</li><li>If you shorten a set, shorten it at the <em>top</em>, not the bottom.</li></ul><p>This is one of the reasons your Push 1 leads with a pressing movement and closes with cable work: the cable keeps tension where the free weight loses it.</p>' },
+
+  { id:'sleep', cat:'Recovery', tier:'strong', src:'Dattilo et al.; Nedeltcheva et al. 2010',
+    t:'Short sleep changes what you lose in a deficit',
+    take:'In one trial, cutting sleep to 5.5 h shifted weight loss from fat toward lean mass by a startling margin.',
+    body:'<p>Sleep restriction raises cortisol, lowers testosterone, blunts insulin sensitivity and increases hunger. In a calorie deficit, poorly slept dieters lost proportionally more lean mass than well-slept ones on identical intakes.</p><p>Before adding a supplement or another training day, get seven to nine hours consistently. It is the highest-leverage and least glamorous intervention available.</p>' },
+
+  { id:'beta-alanine', cat:'Supplements', tier:'moderate', src:'Saunders et al., BJSM 2017',
+    t:'Beta-alanine only helps a narrow window',
+    take:'Meaningful for efforts of roughly 60–240 seconds. Largely irrelevant for a 6-rep set.',
+    body:'<p>It buffers intramuscular acidity, so it helps where acidosis is the limiter: high-rep sets taken near failure, long metcons, 800 m runs. A heavy triple is limited by neural drive and force, not pH.</p><p>If you use it: 3.2–6.4 g daily, split to reduce the harmless skin tingling. Effects come from saturation over weeks, not from the dose before training.</p>' },
+
+  { id:'freq', cat:'Training', tier:'moderate', src:'Schoenfeld et al. 2019 meta-analysis',
+    t:'Frequency matters mostly as a way to fit volume in',
+    take:'Once weekly volume is matched, twice-a-week beats once-a-week modestly — mostly because the sets are better quality.',
+    body:'<p>Twenty hard sets for chest in one session means the last eight are performed tired. Split across two sessions and every set is fresher. That, more than any signalling effect, is the argument for frequency.</p><p>Your split already does this for the push muscles: two push days per rotation gives chest, delts and triceps a second stimulus without a single brutal session.</p>' },
+
+  { id:'rest-times', cat:'Training', tier:'moderate', src:'Schoenfeld et al. 2016',
+    t:'Rest longer than feels necessary',
+    take:'Three minutes on compounds beat one minute for both strength and size in a direct comparison.',
+    body:'<p>Short rests cut the load or the reps you can produce on the next set, and volume-load drives growth. The "metabolic stress" argument for short rests has not held up well.</p><ul><li><strong>Heavy compounds:</strong> 3–5 minutes.</li><li><strong>Accessory compounds:</strong> 2–3 minutes.</li><li><strong>Isolation:</strong> 60–120 seconds.</li></ul><p>The rest timer in your session screen defaults to your setting and you can change it per set.</p>' },
+
+  { id:'mev-mrv', cat:'Training', tier:'moderate', src:'Israetel — volume landmarks',
+    t:'Volume has a floor and a ceiling, and both move',
+    take:'MEV is the least that grows you. MRV is the most you can recover from. Spend the block travelling between them.',
+    body:'<p>The landmarks are rough starting points, not laws — roughly 8–22 hard sets per week for chest, 10–25 for back, 8–20 for quads. Your Progress tab draws them as markers.</p><p>The useful part is the <em>direction</em>: start a block near the low end, add sets as recovery allows, and finish near your ceiling. Then deload and reset. Sitting at a fixed number forever is the most common reason progress stops.</p>' },
+
+  { id:'vitd', cat:'Supplements', tier:'moderate', src:'Multiple; effect limited to deficiency',
+    t:'Vitamin D is worth it if you are low, and not otherwise',
+    take:'Correcting a deficiency helps strength and mood. Topping up a normal level does nothing measurable.',
+    body:'<p>Deficiency is common at higher latitudes and through winter. A blood test costs little and turns this from guesswork into a decision.</p><p>If low, 1000–2000 IU daily is a standard corrective dose. This is one of the few supplements where the honest answer is "test, then decide".</p>' },
+
+  { id:'diet-break', cat:'Nutrition', tier:'moderate', src:'Byrne et al., MATADOR 2018',
+    t:'Intermittent dieting preserved more lean mass than continuous',
+    take:'Two weeks on, two weeks at maintenance, repeated — same average deficit, better composition outcome.',
+    body:'<p>In the MATADOR trial, the intermittent group lost more fat and retained more fat-free mass than a continuous-deficit group matched for total energy restriction, and had less metabolic adaptation.</p><p>Practically: if a cut is running long, planned maintenance weeks are not a failure of discipline. They line up neatly with deload weeks — run them together.</p>' },
+
+  { id:'tempo', cat:'Training', tier:'weak', src:'Schoenfeld et al. 2015',
+    t:'Rep tempo barely matters within a sane range',
+    take:'Anything from about 0.5 to 8 seconds per rep grows muscle similarly. Deliberately slow reps buy nothing.',
+    body:'<p>What matters is the effort and the load, not the metronome. Control the eccentric enough to stay tight and hit the stretch; drive the concentric with intent.</p><p>Very slow reps (10+ seconds) reduce the load you can use and appear to be worse, not better.</p>' },
+
+  { id:'alcohol', cat:'Recovery', tier:'moderate', src:'Parr et al., PLoS One 2014',
+    t:'Alcohol after training blunts the response',
+    take:'Post-exercise protein synthesis fell by roughly a third with a heavy dose, even with protein co-ingested.',
+    body:'<p>The effect scales with dose — one drink is not the same as eight. But a heavy night after a hard leg session is close to wasting the session.</p><p>If you drink, put it as far from a training session as the week allows, and keep protein and sleep intact around it.</p>' },
+
+  { id:'warmup', cat:'Training', tier:'moderate', src:'General practice; Matthews',
+    t:'Warm up the lift, not the body',
+    take:'Three to four ascending sets on the first compound. Nothing for the rest of the session.',
+    body:'<p>A workable ladder for a top set of 100 kg: bar × 10, 50% × 6, 70% × 4, 85% × 2, then work. Rest is short between warm-ups and full before the first working set.</p><p>Once the first compound is done, the muscles are warm. Extra warm-up sets on later exercises mostly add fatigue.</p>' },
+
+  { id:'stall', cat:'Training', tier:'moderate', src:'Israetel; Matthews',
+    t:'What to actually do when a lift stalls',
+    take:'In order: check sleep and food, then check the RIR honesty, then change the movement — not the program.',
+    body:'<ol><li><strong>Recovery.</strong> Three consecutive stalled sessions during a bad sleep stretch is not a programming problem.</li><li><strong>Calories.</strong> Strength on a deficit progresses slowly or not at all. That is expected, not failure.</li><li><strong>RIR drift.</strong> If your "2 RIR" has quietly become 0 RIR, you are training harder than the plan and recovering worse.</li><li><strong>Swap the movement.</strong> At the next block boundary, change the stalled lift for a close cousin. Incline barbell for incline dumbbell, back squat for hack squat.</li></ol><p>Your app flags a stall after three sessions at the same load without rep gain.</p>' },
+
+  { id:'cardio', cat:'Recovery', tier:'moderate', src:'Wilson et al. 2012 meta-analysis',
+    t:'Cardio does not kill gains, volume and modality decide',
+    take:'Cycling interferes less than running. Keep it away from leg day and it costs you very little.',
+    body:'<p>The interference effect is real but overstated at moderate doses. Running produces more eccentric damage and interferes more than cycling at matched effort.</p><p>Practical placement: low-intensity work on rest days or after lifting, not before. Two to four sessions of 20–40 minutes is plenty for health and for appetite management on a cut.</p>' },
+
+  { id:'mind-muscle', cat:'Training', tier:'weak', src:'Schoenfeld et al. 2018',
+    t:'Internal focus helps isolation work, hurts heavy compounds',
+    take:'Think about the muscle on a lateral raise. Think about moving the bar on a squat.',
+    body:'<p>An internal cue ("squeeze the side delt") increased biceps growth in a direct comparison but reduced force output on heavy lifts, where an external cue ("drive the floor away") wins.</p><p>Split your attention by exercise type rather than applying one rule everywhere.</p>' },
+
+  { id:'hmb', cat:'Supplements', tier:'none', src:'Contested; effects absent in trained lifters',
+    t:'HMB does nothing for trained lifters',
+    take:'The striking results came from a small cluster of studies that have not replicated independently.',
+    body:'<p>Independent replications in resistance-trained populations have found effects indistinguishable from placebo. Its plausible use is limited to untrained or catabolic states.</p><p>Same category, same verdict: glutamine, tribulus, ZMA, most "test boosters" that are not actually testosterone.</p>' },
+
+  { id:'citrulline', cat:'Supplements', tier:'weak', src:'Mixed evidence',
+    t:'Citrulline malate — maybe a rep, maybe nothing',
+    take:'Some trials show a small extra rep or two on later sets; others show nothing. Cheap enough to be a personal experiment.',
+    body:'<p>Proposed mechanism is increased nitric oxide and blood flow. Effective doses in positive trials are 6–8 g of citrulline malate roughly an hour before training — well above what most pre-workout blends contain.</p><p>Nobody should expect this to change a training block. It is a marginal-gains item at best.</p>' },
+
+  { id:'bodyweight-tracking', cat:'Nutrition', tier:'strong', src:'General practice',
+    t:'Weigh daily, judge weekly',
+    take:'Day-to-day swings are water, food volume and glycogen. The seven-day average is the signal.',
+    body:'<p>Two to three kilos of same-day variation is normal and means nothing. What matters is the direction of the weekly average.</p><p>Useful rates: <strong>0.25–0.5% of bodyweight per week</strong> gained on a lean bulk, <strong>0.5–1%</strong> lost on a cut. Faster gaining is mostly fat; faster losing costs lean mass.</p>' },
+
+  { id:'exercise-variety', cat:'Training', tier:'weak', src:'Israetel — exercise selection',
+    t:'Rotate movements between blocks, not within them',
+    take:'You cannot run double progression on an exercise you keep changing. Change it at the boundary.',
+    body:'<p>Variety has some value — different strength curves, joint relief, staving off staleness. But progression needs a stable reference. Changing the lift resets the data.</p><p>The block boundary is the natural place: keep the pattern, change the implement. Barbell bench → incline dumbbell → machine press, then back.</p>' },
+
+  { id:'failure', cat:'Training', tier:'moderate', src:'Refalo et al. 2023 meta-analysis',
+    t:'Training to failure is a cost, not a virtue',
+    take:'Sets taken to 0–1 RIR grow muscle about as well as sets to failure, and cost far less recovery.',
+    body:'<p>Failure has a modest hypertrophy edge at best and a clear disadvantage for fatigue, session quality and joint stress — particularly on compounds.</p><p>A reasonable policy: take isolation work to failure in the last week or two of a block, and keep compounds at 1–2 RIR nearly always. That is what the RIR ramp in this app encodes.</p>' }
+];
+const CATS = ['For you','Training','Supplements','Nutrition','Recovery'];
+
+/* generated insight cards from the user's own log */
+function insights(){
+  const out = [];
+  const done = S.sessions.filter(function(s){ return s.entries.some(function(e){
+    return e.sets.some(function(x){ return x.done; }); }); });
+  if(!done.length) return out;
+
+  // 1. stalled lifts
+  const stalled = [];
+  allExercises().forEach(function(ex){
+    const h = history(ex.id);
+    if(h.length < 3) return;
+    if(h[0].load === h[1].load && h[1].load === h[2].load &&
+       totalReps(h[0]) <= totalReps(h[1])) stalled.push(ex.name);
+  });
+  if(stalled.length){
+    out.push({ id:'you-stall', cat:'For you', tier:'', you:true, src:'From your log',
+      t: stalled.length === 1 ? stalled[0] + ' has stopped moving'
+                              : stalled.length + ' lifts have stopped moving',
+      take:'Three sessions at the same load with no added reps: ' + stalled.join(', ') + '.',
+      body:'<p>Before changing anything in the program, check the two things that stall lifts most often: sleep under seven hours, and eating at or below maintenance. Both make added load impossible regardless of programming.</p><p>If both are fine, swap the movement at your next block boundary rather than mid-block — you need stable data to run double progression.</p>' });
+  }
+
+  // 2. volume vs landmarks
+  const vol = volumeByMuscle(1);
+  const under = [], over = [];
+  Object.keys(LANDMARK).forEach(function(m){
+    const lm = LANDMARK[m]; if(!lm.mev) return;
+    const v = Math.round(vol[m] || 0);
+    if(v > 0 && v < lm.mev) under.push(m + ' (' + v + ' vs ' + lm.mev + ')');
+    if(v > lm.mrv) over.push(m + ' (' + v + ' vs ' + lm.mrv + ')');
+  });
+  if(under.length || over.length){
+    out.push({ id:'you-vol', cat:'For you', tier:'', you:true, src:'From your log · last 7 days',
+      t:'Your weekly set count is off the landmarks',
+      take:(under.length ? 'Below minimum: ' + under.join(', ') + '. ' : '') +
+           (over.length ? 'Above your likely ceiling: ' + over.join(', ') + '.' : ''),
+      body:'<p>These landmarks are population estimates, not your personal numbers — but a muscle sitting under its minimum effective volume for weeks is the most common reason one body part lags.</p>' +
+           (over.length ? '<p>Being over the maximum recoverable volume is usually worse than being slightly under it: the sets stop contributing and start costing recovery you need elsewhere.</p>' : '') });
+  }
+
+  // 3. best recent lift
+  let bestGain = null;
+  allExercises().forEach(function(ex){
+    const h = history(ex.id).slice(0, 12);   // recent form, not 2024
+    if(h.length < 4) return;
+    if(h[0].date < isoOffset(-21)) return;   // dormant lifts don't count
+    const now = bestSetE1rm(h[0]), then = bestSetE1rm(h[h.length-1]);
+    if(!then) return;
+    const pct = (now - then) / then * 100;
+    if(pct > 2 && (!bestGain || pct > bestGain.pct))
+      bestGain = { name:ex.name, pct:pct, sessions:h.length };
+  });
+  if(bestGain){
+    out.push({ id:'you-best', cat:'For you', tier:'', you:true, src:'From your log',
+      t:bestGain.name + ' is your strongest trend',
+      take:'Estimated 1RM up ' + bestGain.pct.toFixed(1) + '% across your last ' +
+           bestGain.sessions + ' sessions of it.',
+      body:'<p>Worth noticing which lifts respond to your current setup and which do not. A movement that climbs steadily is one to keep through the next block; the flat ones are your rotation candidates.</p>' });
+  }
+
+  // 4. phase-contextual card
+  const ph = curPhase();
+  if(ph === 'deload'){
+    out.push({ id:'you-deload', cat:'For you', tier:'', you:true, src:'Where you are in the block',
+      t:'You are in a deload week',
+      take:'Half the sets, about 65% of your working loads, 4 reps in reserve.',
+      body:'<p>Resist the urge to "make it count". The purpose is to arrive at the next block with the fatigue gone and the movement patterns intact. Every prescription in Today has already been scaled — just follow them.</p><p>Keep protein and sleep exactly where they were. Recovery is the training this week.</p>' });
+  } else if(curWeek() === 1){
+    out.push({ id:'you-wk1', cat:'For you', tier:'', you:true, src:'Where you are in the block',
+      t:'Week 1 of a ' + PHASE[ph].label.toLowerCase() + ' block',
+      take:PHASE[ph].note,
+      body:'<p>Target is ' + targetRir(ph, 1) + ' reps in reserve. That should feel conservative — it is meant to. The loads you set this week are the base the whole block progresses from, so err slightly light rather than slightly heavy.</p>' });
+  }
+  return out;
+}
+function bestSetE1rm(h){
+  return h.sets.reduce(function(a, st){ return Math.max(a, e1rm(st.w, st.reps, st.rir)); }, 0);
+}
+function allExercises(){
+  const seen = {}, out = [];
+  S.program.days.forEach(function(d){ d.exercises.forEach(function(e){
+    if(!seen[e.id]){ seen[e.id] = 1; out.push(e); } }); });
+  return out;
+}
+
+/* ---------- 11. (history ships with the app — see expandArchive) --------- */
+
+/* ---------- 12. Rendering helpers --------------------------------------- */
+
+const $ = function(sel, root){ return (root || document).querySelector(sel); };
+function esc(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function toast(msg){
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 2100);
+}
+function icon(name){
+  const p = {
+    today:'<path d="M3 5h18M3 5v14a1 1 0 001 1h16a1 1 0 001-1V5M8 3v4M16 3v4M7 12h4M7 16h8"/>',
+    progress:'<path d="M3 20h18M6 16V9M11 16V5M16 16v-5M21 16v-8"/>',
+    feed:'<path d="M4 5h16M4 11h16M4 17h10M19.5 15.5l1.8 1.8-4 4H15.5v-1.8z"/>',
+    plan:'<path d="M5 4h14a1 1 0 011 1v15l-4-2.5L12 20l-4-2.5L5 20V5a1 1 0 011-1z"/>',
+    check:'<path d="M4 12.5l5 5L20 6.5"/>'
+  }[name] || '';
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+         'stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>';
+}
+const TABS = [
+  { k:'today', l:'Today' }, { k:'progress', l:'Progress' },
+  { k:'feed', l:'Feed' }, { k:'plan', l:'Plan' }
+];
+function renderTabs(){
+  $('#tabs').innerHTML = TABS.map(function(t){
+    return '<button class="tab" data-tab="' + t.k + '" aria-current="' +
+      (S.ui.tab === t.k) + '">' + icon(t.k) + '<span>' + t.l + '</span></button>';
+  }).join('');
+}
+
+/* ---------- 13. Views ---------------------------------------------------- */
+
+function render(){
+  applyTheme();
+  renderTabs();
+  const v = $('#view');
+  if(S.ui.active){ v.innerHTML = viewSession(); }
+  else if(S.ui.tab === 'today') v.innerHTML = viewToday();
+  else if(S.ui.tab === 'progress') v.innerHTML = viewProgress();
+  else if(S.ui.tab === 'feed') v.innerHTML = viewFeed();
+  else v.innerHTML = viewPlan();
+  $('#tabs').style.display = S.ui.active ? 'none' : 'grid';
+  document.body.classList.toggle('in-session', !!S.ui.active);
+}
+function applyTheme(){ document.documentElement.setAttribute('data-theme','dark'); }
+
+/* --- TODAY --- */
+function viewToday(){
+  const day = curDay(), phase = curPhase(), week = curWeek();
+  const b = curBlock();
+  const rows = day.exercises.map(function(ex){
+    const p = prescribe(ex, phase, week);
+    return '<div class="plan-row"><div><div class="nm">' + esc(ex.name) + '</div>' +
+      '<div class="sub">' + esc(ex.muscle) + ' · ' + p.sets + ' sets</div></div>' +
+      '<div class="plan-rx"><span class="w">' +
+      (p.load === null ? '<span class="faint">set it</span>' : fmtW(p.load) + '<span class="u"> ' + U() + '</span>') +
+      '</span><span class="r">' + p.range[0] + '–' + p.range[1] + ' @ ' + p.rir + ' RIR</span></div></div>';
+  }).join('');
+
+  const totalSets = day.exercises.reduce(function(a, ex){
+    return a + setsFor(ex, phase, week); }, 0);
+  const lastS = S.sessions[0];
+  const streak = computeStreak();
+  const ins = insights();
+
+  return   '<div class="topbar"><div><p class="eyebrow">' + fmtDate(new Date()) + '</p>' +
+    '<h1>Today</h1></div>' +
+    '<span class="pill pill-' + phase + '">' + PHASE[phase].label + ' · wk ' + week + '/' + b.weeks + '</span></div>' +
+
+  '<div class="today-hero">' +
+    '<p class="eyebrow">Next session · cycle ' + S.meso.cycle + '</p>' +
+    '<h2>' + esc(day.name) + '</h2>' +
+    '<p class="today-focus">' + esc(day.focus) + ' · ' + totalSets + ' working sets · target ' +
+      targetRir(phase, week) + ' RIR</p>' +
+    '<div class="plan-list">' + rows + '</div>' +
+    '<button class="btn btn-primary btn-lg" data-act="start" style="margin-top:14px">Start ' +
+      esc(day.name) + '</button>' +
+    '<div class="row" style="margin-top:10px;gap:8px">' +
+      '<button class="btn btn-ghost btn-sm" data-act="skip" style="flex:1">Skip to next day</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="pickday" style="flex:1">Pick a day</button>' +
+    '</div>' +
+  '</div>' +
+
+  '<p class="sec-title">Block</p>' +
+  '<div class="card"><div class="spread"><div>' +
+    '<div style="font-weight:700;font-size:14px">' + PHASE[phase].label + ' block</div>' +
+    '<div class="faint" style="font-size:12px;margin-top:2px">' + esc(PHASE[phase].note) + '</div>' +
+    '</div></div>' + mesoStrip() + '</div>' +
+
+  '<p class="sec-title">This week</p>' +
+  '<div class="stat-grid">' +
+    stat('Sessions', String(sessionsThisWeek()), '') +
+    stat('Hard sets', String(setsLast7()), '') +
+    stat('Streak', String(streak), streak === 1 ? 'wk' : 'wks') +
+  '</div>' +
+
+  (lastS ? '<p class="sec-title">Last session</p>' +
+    '<div class="card"><div class="spread">' +
+    '<div><div style="font-weight:700">' + esc(lastS.dayName) + '</div>' +
+    '<div class="faint" style="font-size:12px;margin-top:2px">' + fmtDate(new Date(lastS.date + 'T12:00:00')) +
+    ' · ' + lastS.entries.reduce(function(a,e){ return a + e.sets.filter(function(s){return s.done;}).length; }, 0) +
+    ' sets · ' + (lastS.duration || 0) + ' min</div></div>' +
+    '<span class="pill pill-' + lastS.phase + '">' + PHASE[lastS.phase].label + '</span>' +
+    '</div></div>' : '') +
+
+  (ins.length ? '<p class="sec-title">Worth knowing</p>' + feedCard(ins[0], true) : '');
+}
+function stat(k, v, u){
+  return '<div class="stat"><div class="k">' + k + '</div><div class="v mono">' + v +
+    (u ? '<span class="u">' + u + '</span>' : '') + '</div></div>';
+}
+function mesoStrip(){
+  return '<div class="meso-strip">' + weekTimeline().map(function(w){
+    return '<div class="meso-week" data-p="' + w.type + '" data-now="' + (w.now ? 1 : 0) + '">' +
+      (w.type === 'deload' ? 'DL' : w.week) + '</div>';
+  }).join('') + '</div>';
+}
+function fmtDate(d){
+  return d.toLocaleDateString(undefined, { weekday:'long', day:'numeric', month:'short' });
+}
+function setsLast7(){
+  const cut = new Date(); cut.setDate(cut.getDate() - 7);
+  const iso = cut.toISOString().slice(0,10);
+  return S.sessions.filter(function(s){ return s.date >= iso; })
+    .reduce(function(n, s){ return n + s.entries.reduce(function(m, e){
+      return m + e.sets.filter(function(x){ return x.done; }).length; }, 0); }, 0);
+}
+function sessionsThisWeek(){
+  const k = weekKey(new Date().toISOString().slice(0,10));
+  return S.sessions.filter(function(s){ return weekKey(s.date) === k; }).length;
+}
+function computeStreak(){
+  const keys = {};
+  S.sessions.forEach(function(s){ keys[weekKey(s.date)] = 1; });
+  let n = 0;
+  const d = new Date();
+  for(let i = 0; i < 60; i++){
+    const k = weekKey(d.toISOString().slice(0,10));
+    if(keys[k]) n++;
+    else if(i > 0) break;
+    d.setDate(d.getDate() - 7);
+  }
+  return n;
+}
+
+/* --- SESSION --- */
+function viewSession(){
+  const a = S.ui.active;
+  const cards = a.entries.map(function(e, i){ return exCard(e, i); }).join('<div style="height:11px"></div>');
+  const logged = a.entries.reduce(function(n, e){
+    return n + e.sets.filter(function(s){ return s.done; }).length; }, 0);
+  const total = a.entries.reduce(function(n, e){ return n + e.sets.length; }, 0);
+  return '<div class="sess-head">' +
+      '<div class="spread"><div><div class="t">' + esc(a.dayName) + '</div>' +
+      '<div class="faint mono" style="font-size:11.5px;margin-top:2px">' +
+        PHASE[a.phase].label + ' · wk ' + a.week + ' · ' + logged + '/' + total + ' sets · ' +
+        '<span id="elapsed">0:00</span></div></div>' +
+      '<button class="btn btn-ghost btn-sm" data-act="quit">Close</button></div>' +
+      '<div class="timer-bar" id="timerbar" data-act="timer-toggle" role="button" tabindex="0">' +
+        '<span class="timer-lbl" id="timerlbl">Rest</span>' +
+        '<span class="timer-mid"><span class="timer-val" id="timerval">' +
+          mmss(S.settings.rest) + '</span>' +
+          '<span class="timer-track"><span class="timer-fill" id="timerfill"></span></span></span>' +
+        '<button class="timer-adj" data-act="timer-plus">+30</button>' +
+      '</div></div>' +
+    '<div style="height:12px"></div>' + cards +
+    '<div class="sess-actions"><button class="btn btn-primary btn-lg" data-act="finish">' +
+      'Finish session</button></div>';
+}
+function exCard(e, i){
+  const allDone = e.sets.length > 0 && e.sets.every(function(s){ return s.done; });
+  return '<div class="ex-card' + (allDone ? ' done' : '') + '" data-ex="' + i + '" id="exc' + i + '">' +
+    exCardInner(e, i) + '</div>';
+}
+function exCardInner(e, i){
+  const rows = e.sets.map(function(st, j){
+    return '<div class="set-row' + (st.done ? ' logged' : '') + '" data-ex="' + i + '" data-set="' + j + '">' +
+      '<span class="set-n">' + (j + 1) + '</span>' +
+      '<span class="stepper"><button data-act="w-" aria-label="Less weight">−</button>' +
+        '<input class="val mono" type="number" inputmode="decimal" step="any" value="' +
+        (st.w || 0) + '" data-act="w-set" aria-label="Weight">' +
+        '<button data-act="w+" aria-label="More weight">+</button></span>' +
+      '<span class="stepper"><button data-act="r-" aria-label="Fewer reps">−</button>' +
+        '<input class="val mono" type="number" inputmode="numeric" step="1" value="' +
+        (st.reps || 0) + '" data-act="r-set" aria-label="Reps"></span>' +
+      '<select class="rir-sel mono" data-act="rir" aria-label="Reps in reserve">' +
+        [0,1,2,3,4,5].map(function(n){
+          return '<option value="' + n + '"' + (st.rir === n ? ' selected' : '') + '>' + n + '</option>';
+        }).join('') + '</select>' +
+      '<button class="tick" data-act="log" aria-label="Log set">' + icon('check') + '</button>' +
+    '</div>';
+  }).join('');
+  return '<div class="ex-head"><div><div class="nm">' + esc(e.name) + '</div>' +
+      '<div class="meta">' + esc(e.muscle) + (e.prevText ? ' · last: ' + esc(e.prevText) : '') + '</div></div></div>' +
+    '<div class="ex-rx"><span class="rx-tag">' + e.range[0] + '–' + e.range[1] + ' reps</span>' +
+      '<span class="rx-tag">' + e.rir + ' RIR</span>' +
+      '<span class="rx-tag">' + e.sets.length + ' sets</span>' +
+      (e.target ? '<span class="rx-tag">target ' + fmtW(e.target) + ' ' + U() + '</span>' : '') + '</div>' +
+    (e.why ? '<div class="why' + (e.tone ? ' ' + e.tone : '') + '">' + esc(e.why) + '</div>' : '') +
+    '<div class="set-tbl"><div class="set-hdr"><span>#</span><span>' + U() +
+      '</span><span>Reps</span><span>RIR</span><span></span></div>' + rows + '</div>' +
+    '<div class="ex-foot">' +
+      '<button class="btn btn-ghost btn-sm" data-act="addset" data-ex="' + i + '">Add set</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="dropset" data-ex="' + i + '">Remove set</button>' +
+    '</div>';
+}
+function mmss(s){
+  s = Math.max(0, Math.round(s));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+/* --- PROGRESS --- */
+function viewProgress(){
+  const exList = allExercises();
+  const sel = S.ui.chartEx || (exList[0] && exList[0].id);
+  const vol = volumeByMuscle(1);
+  const bw = S.bodyweight.slice().sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+
+  const volRows = MUSCLES.filter(function(m){ return (vol[m] || 0) > 0 || LANDMARK[m].mev > 0; })
+    .map(function(m){
+      const lm = LANDMARK[m], v = Math.round((vol[m] || 0) * 10) / 10;
+      const scale = lm.mrv * 1.25;
+      const cls = v < lm.mev ? 'under' : v > lm.mrv ? 'over' : '';
+      return '<div class="vol-row"><span class="vol-name">' + m + '</span>' +
+        '<span class="vol-track">' +
+          '<span class="vol-fill ' + cls + '" style="width:' + clamp(v / scale * 100, 0, 100) + '%"></span>' +
+          '<span class="vol-mev" style="left:' + (lm.mev / scale * 100) + '%"></span>' +
+          '<span class="vol-mrv" style="left:' + (lm.mrv / scale * 100) + '%"></span>' +
+        '</span><span class="vol-num">' + v + '</span></div>';
+    }).join('');
+
+  const prs = exList.map(function(ex){
+    const b = bestE1rm(ex.id);
+    return { name:ex.name, v:b.value, d:b.date };
+  }).filter(function(x){ return x.v > 0; })
+    .sort(function(a,b){ return b.v - a.v; }).slice(0, 8);
+
+  return '<div class="topbar"><div><p class="eyebrow">Cycle ' + S.meso.cycle + ' · ' +
+      S.sessions.length + ' sessions logged</p><h1>Progress</h1></div></div>' +
+
+    '<p class="sec-title">Estimated 1RM</p>' +
+    '<div class="card">' +
+      '<select class="rir-sel" id="chartex" style="width:100%;text-align:left;padding:10px 12px;' +
+        'font-family:var(--f-display);font-size:14px;margin-bottom:12px">' +
+        exList.map(function(ex){
+          return '<option value="' + ex.id + '"' + (ex.id === sel ? ' selected' : '') + '>' +
+            esc(ex.name) + '</option>'; }).join('') +
+      '</select>' +
+      '<div class="chipbar" style="padding-bottom:4px;margin-bottom:2px">' +
+        [[90,'3 months'],[365,'1 year'],[0,'All 2.5 years']].map(function(r){
+          return '<button class="chip" data-range="' + r[0] + '" aria-pressed="' +
+            ((S.ui.chartRange === undefined ? 365 : S.ui.chartRange) === r[0]) + '">' +
+            r[1] + '</button>'; }).join('') + '</div>' +
+      lineChart(sel) +
+    '</div>' +
+
+    '<p class="sec-title">Weekly hard sets · last 7 days</p>' +
+    '<div class="card">' + (volRows || '<div class="empty">Log a session to see volume.</div>') +
+      '<div class="faint" style="font-size:11px;margin-top:11px;line-height:1.45">' +
+      'Markers are RP volume landmarks: the left tick is minimum effective volume, ' +
+      'the right is maximum recoverable. Amber is under the floor, red is over the ceiling. ' +
+      'Secondary muscles count as half a set.</div></div>' +
+
+    '<p class="sec-title">Bodyweight</p>' +
+    '<div class="card">' +
+      (bw.length > 1 ? bwChart(bw) : '<div class="empty">Add a couple of readings to see the trend.</div>') +
+      '<div class="row" style="margin-top:12px;gap:8px">' +
+        '<input class="search" id="bwin" type="number" inputmode="decimal" step="0.1" ' +
+          'placeholder="Today’s weight in ' + U() + '" style="margin:0;flex:1">' +
+        '<button class="btn btn-primary btn-sm" data-act="addbw">Add</button></div>' +
+    '</div>' +
+
+    '<p class="sec-title">Best estimated 1RM</p>' +
+    '<div class="card">' + (prs.length ? prs.map(function(p){
+        return '<div class="pr-row"><div><div style="font-weight:600;font-size:13.5px">' +
+          esc(p.name) + '</div><div class="faint" style="font-size:11px">' + p.d + '</div></div>' +
+          '<div class="mono" style="font-weight:600;font-size:16px">' + fmtW(Math.round(p.v * 2) / 2) +
+          '<span class="u faint" style="font-size:11px"> ' + U() + '</span></div></div>';
+      }).join('') : '<div class="empty">No completed sets yet.</div>') + '</div>';
+}
+
+function lineChart(exId){
+  const days = S.ui.chartRange === undefined ? 365 : S.ui.chartRange;
+  let cut = '0000';
+  if(days){ const c = new Date(); c.setDate(c.getDate() - days); cut = c.toISOString().slice(0,10); }
+  const h = history(exId, {skipDeload:false}).slice().reverse();
+  const pts = h.map(function(x){ return { d:x.date, v:bestSetE1rm(x) }; })
+    .filter(function(p){ return p.v > 0 && p.d >= cut; });
+  if(pts.length < 2) return '<div class="empty">Two logged sessions of this lift and a chart appears here.</div>';
+
+  const W = 320, H = 130, PL = 34, PR = 8, PT = 12, PB = 22;
+  const vals = pts.map(function(p){ return p.v; });
+  let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  const pad = Math.max((hi - lo) * 0.18, hi * 0.03, 1);
+  lo = lo - pad; hi = hi + pad;
+  const x = function(i){ return PL + i / (pts.length - 1) * (W - PL - PR); };
+  const y = function(v){ return PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB); };
+  const d = pts.map(function(p, i){ return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' ');
+  const area = d + ' L' + x(pts.length - 1).toFixed(1) + ' ' + (H - PB) + ' L' + PL + ' ' + (H - PB) + ' Z';
+  const ticks = [lo + pad, (lo + hi) / 2, hi - pad];
+  const last = pts[pts.length - 1];
+
+  return '<div class="chart-wrap"><svg class="chart" viewBox="0 0 ' + W + ' ' + H +
+    '" role="img" aria-label="Estimated one rep max over time">' +
+    ticks.map(function(t){
+      return '<line x1="' + PL + '" x2="' + (W - PR) + '" y1="' + y(t).toFixed(1) + '" y2="' + y(t).toFixed(1) +
+        '" stroke="var(--line)" stroke-width="1"/>' +
+        '<text x="' + (PL - 6) + '" y="' + (y(t) + 3.5).toFixed(1) + '" text-anchor="end" ' +
+        'font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-faint)">' +
+        Math.round(t) + '</text>'; }).join('') +
+    '<path d="' + area + '" fill="var(--accent)" opacity="0.10"/>' +
+    '<path d="' + d + '" fill="none" stroke="var(--accent)" stroke-width="2" ' +
+      'stroke-linejoin="round" stroke-linecap="round"/>' +
+    pts.map(function(p, i){
+      const lastPt = i === pts.length - 1;
+      if(!lastPt && pts.length > 40) return '';
+      return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="' +
+        (lastPt ? 4 : 2.4) + '" fill="var(--accent)"/>'; }).join('') +
+    '<text x="' + PL + '" y="' + (H - 6) + '" font-family="IBM Plex Mono, monospace" font-size="9" ' +
+      'fill="var(--text-faint)">' + pts[0].d.slice(5) + '</text>' +
+    '<text x="' + (W - PR) + '" y="' + (H - 6) + '" text-anchor="end" ' +
+      'font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-faint)">' +
+      last.d.slice(5) + '</text>' +
+    '</svg></div>' +
+    '<div class="spread" style="margin-top:8px"><span class="faint" style="font-size:11.5px">' +
+      pts.length + ' sessions · Epley estimate</span>' +
+      '<span class="mono" style="font-weight:600">' + fmtW(Math.round(last.v * 2) / 2) + ' ' + U() + '</span></div>';
+}
+function bwChart(bw){
+  const W = 320, H = 92, PL = 32, PR = 8, PT = 10, PB = 18;
+  const vals = bw.map(function(p){ return p.kg; });
+  let lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  const pad = Math.max((hi - lo) * 0.25, 0.6); lo -= pad; hi += pad;
+  const x = function(i){ return PL + i / (bw.length - 1) * (W - PL - PR); };
+  const y = function(v){ return PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB); };
+  const d = bw.map(function(p, i){ return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.kg).toFixed(1); }).join(' ');
+  const delta = bw[bw.length - 1].kg - bw[0].kg;
+  return '<div class="chart-wrap"><svg class="chart" viewBox="0 0 ' + W + ' ' + H +
+    '" role="img" aria-label="Bodyweight trend">' +
+    [lo + pad, hi - pad].map(function(t){
+      return '<line x1="' + PL + '" x2="' + (W - PR) + '" y1="' + y(t).toFixed(1) + '" y2="' + y(t).toFixed(1) +
+        '" stroke="var(--line)" stroke-width="1"/><text x="' + (PL - 6) + '" y="' + (y(t) + 3.5).toFixed(1) +
+        '" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" ' +
+        'fill="var(--text-faint)">' + t.toFixed(1) + '</text>'; }).join('') +
+    '<path d="' + d + '" fill="none" stroke="var(--pink)" stroke-width="2" stroke-linejoin="round"/>' +
+    bw.map(function(p, i){ return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.kg).toFixed(1) +
+      '" r="2.6" fill="var(--pink)"/>'; }).join('') +
+    '</svg></div><div class="spread" style="margin-top:6px">' +
+    '<span class="faint" style="font-size:11.5px">' + bw.length + ' readings</span>' +
+    '<span class="mono" style="font-weight:600;color:' + (delta >= 0 ? 'var(--hit)' : 'var(--warn)') + '">' +
+    (delta >= 0 ? '+' : '') + delta.toFixed(1) + ' ' + U() + '</span></div>';
+}
+
+/* --- FEED --- */
+function viewFeed(){
+  const cat = S.ui.feedCat || 'For you';
+  const ins = insights();
+  let items;
+  if(cat === 'For you') items = ins.concat(FEED.filter(function(f){
+    return (curPhase() === 'deload' && f.id === 'deload-why') ||
+           (curPhase() === 'strength' && f.id === 'double-prog') ||
+           (curPhase() === 'hypertrophy' && f.id === 'mev-mrv') || f.id === 'rir-ramp';
+  }));
+  else items = FEED.filter(function(f){ return f.cat === cat; });
+
+  return '<div class="topbar"><div><p class="eyebrow">Curated · no infinite scroll</p>' +
+      '<h1>Feed</h1></div></div>' +
+    '<div class="chipbar">' + CATS.map(function(c){
+      return '<button class="chip" data-cat="' + c + '" aria-pressed="' + (c === cat) + '">' + c + '</button>';
+    }).join('') + '</div>' +
+    (items.length ? items.map(function(f){ return feedCard(f, false); }).join('')
+      : '<div class="empty">Nothing here yet.</div>') +
+    '<p class="faint" style="font-size:11px;line-height:1.5;margin:18px 2px 0">' +
+    'Summaries of published work and of positions taken publicly by Mike Israetel and Mike Matthews. ' +
+    'General information for training, not medical advice — check with a doctor before starting a ' +
+    'supplement, particularly alongside medication.</p>';
+}
+function feedCard(f, compact){
+  const open = !!S.ui.open && S.ui.open[f.id];
+  return '<div class="fcard' + (f.you ? ' you' : '') + '">' +
+    '<div class="row" style="justify-content:space-between">' +
+      '<span class="pill pill-flat">' + esc(f.cat) + '</span>' +
+      (f.tier ? '<span class="tier tier-' + f.tier + '">' + f.tier + ' evidence</span>' : '') +
+    '</div>' +
+    '<h3>' + esc(f.t) + '</h3>' +
+    '<p class="take">' + esc(f.take) + '</p>' +
+    (open ? '<div class="body">' + f.body + '</div>' : '') +
+    (compact ? '' :
+      '<button class="expander" data-open="' + f.id + '">' +
+        (open ? 'Show less' : 'Read more') + '</button>') +
+    '<div class="src"><span>' + esc(f.src) + '</span></div>' +
+  '</div>';
+}
+
+/* --- PLAN --- */
+function viewPlan(){
+  const days = S.program.days.map(function(d, di){
+    return '<div class="day-card"><div class="day-head">' +
+      '<div><div class="nm">' + esc(d.name) + '</div>' +
+      '<div class="faint" style="font-size:11.5px;margin-top:1px">' + esc(d.focus) + '</div></div>' +
+      '<span class="ct">' + d.exercises.reduce(function(a,e){ return a + e.sets; }, 0) + ' base sets</span>' +
+      '</div>' +
+      d.exercises.map(function(e, ei){
+        return '<div class="ex-line"><div><div class="nm">' + esc(e.name) + '</div>' +
+          '<div class="mg">' + esc(e.muscle) + (e.comp ? ' · compound' : '') + '</div></div>' +
+          '<span class="setcount"><button data-act="sets-" data-d="' + di + '" data-e="' + ei + '">−</button>' +
+          '<span class="v mono">' + e.sets + '</span>' +
+          '<button data-act="sets+" data-d="' + di + '" data-e="' + ei + '">+</button></span>' +
+          '<button class="xbtn" data-act="rmex" data-d="' + di + '" data-e="' + ei + '" ' +
+          'aria-label="Remove ' + esc(e.name) + '">✕</button></div>';
+      }).join('') +
+      '<div style="padding:10px 14px;border-top:1px solid var(--line-soft)">' +
+        '<button class="btn btn-ghost btn-sm" data-act="addex" data-d="' + di + '" ' +
+        'style="width:100%">Add exercise to ' + esc(d.name) + '</button></div>' +
+    '</div>';
+  }).join('');
+
+  const st = S.settings;
+  return '<div class="topbar"><div><p class="eyebrow">Program &amp; settings</p><h1>Plan</h1></div></div>' +
+
+    '<p class="sec-title">Mesocycle</p>' +
+    '<div class="card">' + mesoStrip() +
+      '<div class="faint" style="font-size:11.5px;margin-top:10px;line-height:1.45">' +
+      blocks().map(function(b){ return b.weeks + ' wk ' + PHASE[b.type].label.toLowerCase(); }).join(' → ') +
+      ' → repeat. You are on cycle ' + S.meso.cycle + ', ' + PHASE[curPhase()].label.toLowerCase() +
+      ' week ' + curWeek() + ', next day is ' + esc(curDay().name) + '.</div>' +
+      blocks().map(function(b, i){
+        return '<div class="field"><div><div class="lbl">' + PHASE[b.type].label +
+          (i === 1 ? ' (after strength)' : i === 3 ? ' (after hypertrophy)' : '') + '</div>' +
+          '<div class="hint">' + esc(PHASE[b.type].note) + '</div></div>' +
+          '<input type="number" min="1" max="8" value="' + b.weeks + '" data-act="blockweeks" data-i="' + i + '"></div>';
+      }).join('') +
+      '<div class="row" style="margin-top:12px;gap:8px">' +
+      '<button class="btn btn-ghost btn-sm" data-act="meso-back" style="flex:1">← Back a day</button>' +
+      '<button class="btn btn-ghost btn-sm" data-act="meso-fwd" style="flex:1">Forward a day →</button></div>' +
+    '</div>' +
+
+    '<p class="sec-title">Training days</p>' + days +
+
+    '<p class="sec-title">Loading</p>' +
+    '<div class="card">' +
+      '<div class="field"><div><div class="lbl">Units</div>' +
+        '<div class="hint">Changes labels and increments. Existing numbers are not converted.</div></div>' +
+        '<div class="seg"><button data-act="units" data-v="kg" aria-pressed="' + (st.units === 'kg') + '">kg</button>' +
+        '<button data-act="units" data-v="lb" aria-pressed="' + (st.units === 'lb') + '">lb</button></div></div>' +
+      '<div class="field"><div><div class="lbl">Upper-body jump</div>' +
+        '<div class="hint">Added when every set clears the top of the range.</div></div>' +
+        '<input type="number" step="0.5" min="0.5" value="' + st.incUpper + '" data-act="incUpper"></div>' +
+      '<div class="field"><div><div class="lbl">Lower-body jump</div>' +
+        '<div class="hint">Squats, deadlifts, leg press, hip thrust.</div></div>' +
+        '<input type="number" step="0.5" min="0.5" value="' + st.incLower + '" data-act="incLower"></div>' +
+      '<div class="field"><div><div class="lbl">Default rest</div>' +
+        '<div class="hint">Seconds. Starts the moment you log a set.</div></div>' +
+        '<input type="number" step="15" min="30" value="' + st.rest + '" data-act="rest"></div>' +
+      '<div class="field"><div><div class="lbl">Autoregulate volume</div>' +
+        '<div class="hint">Asks for pump, soreness and performance per muscle after each session, ' +
+        'then adds or cuts sets next time.</div></div>' +
+        '<div class="seg"><button data-act="autoreg" data-v="1" aria-pressed="' + (st.autoreg) + '">On</button>' +
+        '<button data-act="autoreg" data-v="0" aria-pressed="' + (!st.autoreg) + '">Off</button></div></div>' +
+    '</div>' +
+
+    '<p class="sec-title">Data</p>' +
+    '<div class="card">' +
+      '<div class="spread" style="margin-bottom:12px"><span class="faint" style="font-size:12px">' +
+      '<span class="syncdot' + (dbStatus === 'synced' ? ' on' : '') + '"></span> ' +
+      (dbStatus === 'synced' ? 'Synced to your account — opens on any device'
+                             : 'Saved on this device only') + '</span>' +
+      '<span class="mono faint" style="font-size:12px">' + S.sessions.length + ' sessions</span></div>' +
+      '<div class="row" style="gap:8px;margin-bottom:12px">' +
+        stat('From your log', String(S.sessions.filter(function(x){ return x.arch; }).length), '') +
+        stat('Logged in app', String(S.sessions.filter(function(x){ return !x.arch; }).length), '') +
+      '</div>' +
+      '<div class="faint" style="font-size:11.5px;line-height:1.45;margin-bottom:12px">' +
+      SEED.ARCH.length + ' of those were imported from your written log ' +
+      '(1 Mar 2024 – 15 Sep 2026) and ship inside the app, so they cannot be lost. ' +
+      'Sessions you log from here on sync to your account.</div>' +
+      '<div class="row" style="gap:8px">' +
+        '<button class="btn btn-ghost btn-sm" data-act="export" style="flex:1">Export JSON</button>' +
+        '<button class="btn btn-ghost btn-sm" data-act="import" style="flex:1">Import</button></div>' +
+      '<button class="btn btn-danger btn-sm" data-act="reset" style="width:100%;margin-top:8px">' +
+        'Erase everything and start over</button>' +
+    '</div>' +
+    '<p class="faint" style="font-size:11px;margin:16px 2px 0;line-height:1.5">' +
+    'Iron Ledger · your rep ranges (5–7 / 8–10 strength, 8–10 / 10–12 hypertrophy), ' +
+    'block periodisation after Mike Israetel (volume landmarks, RIR ramp, autoregulated ' +
+    'set progression) and Mike Matthews (double progression, compound emphasis).</p>';
+}
+
+/* ---------- 14. Session lifecycle --------------------------------------- */
+
+function startSession(){
+  const day = curDay(), phase = curPhase(), week = curWeek();
+  const entries = day.exercises.map(function(ex){
+    const p = prescribe(ex, phase, week);
+    const h = history(ex.id, {skipDeload:false});
+    const prev = h[0];
+    const sets = [];
+    for(let i = 0; i < p.sets; i++){
+      sets.push({ w: p.load === null ? 0 : p.load,
+                  reps: p.range[1], rir: p.rir, done:false });
+    }
+    return { exId:ex.id, name:ex.name, muscle:ex.muscle, secondary:ex.secondary,
+             range:p.range, rir:p.rir, target:p.load, why:p.why, tone:p.tone,
+             prevText: prev ? fmtW(prev.load) + ' × ' +
+               prev.sets.map(function(s){ return s.reps; }).join('/') : '',
+             sets:sets };
+  });
+  S.ui.active = {
+    id:'s' + Date.now(), date:new Date().toISOString().slice(0,10),
+    dayId:day.id, dayName:day.name, phase:phase, week:week,
+    block:S.meso.cursor.block, entries:entries, feedback:{}, notes:'',
+    startedAt:Date.now()
+  };
+  save();
+  render();
+  startElapsed();
+  keepAwake(true);
+}
+let elapsedTimer = null, restTimer = null, restLeft = 0, restTotal = 0;
+let wakeLock = null;
+/** Stop the phone locking itself between sets. */
+async function keepAwake(on){
+  try {
+    if(on){
+      if(!wakeLock && 'wakeLock' in navigator){
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', function(){ wakeLock = null; });
+      }
+    } else if(wakeLock){ await wakeLock.release(); wakeLock = null; }
+  } catch(e){ /* unsupported or denied - the session still works */ }
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && S && S.ui && S.ui.active) keepAwake(true);
+});
+function startElapsed(){
+  clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(function(){
+    const el = document.getElementById('elapsed');
+    if(!el || !S.ui.active){ clearInterval(elapsedTimer); return; }
+    el.textContent = mmss((Date.now() - S.ui.active.startedAt) / 1000);
+  }, 1000);
+}
+function startRest(sec){
+  restTotal = sec; restLeft = sec;
+  clearInterval(restTimer);
+  document.getElementById('timerbar') && document.getElementById('timerbar').classList.add('live');
+  restTimer = setInterval(tickRest, 1000);
+  paintRest();
+}
+function tickRest(){
+  restLeft -= 1;
+  if(restLeft <= 0){
+    clearInterval(restTimer); restTimer = null; restLeft = 0;
+    const bar = document.getElementById('timerbar');
+    if(bar) bar.classList.remove('live');
+    if(navigator.vibrate) navigator.vibrate([90, 60, 90]);
+    beep();
+  }
+  paintRest();
+}
+function paintRest(){
+  const v = document.getElementById('timerval'), f = document.getElementById('timerfill');
+  const l = document.getElementById('timerlbl');
+  if(v) v.textContent = mmss(restLeft || S.settings.rest);
+  if(f) f.style.width = restTotal ? ((restTotal - restLeft) / restTotal * 100) + '%' : '0%';
+  if(l) l.textContent = restTimer ? 'Resting' : 'Rest';
+}
+let actx = null;
+function beep(){
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.connect(g); g.connect(actx.destination);
+    o.frequency.value = 660; g.gain.value = 0.08;
+    o.start(); o.stop(actx.currentTime + 0.18);
+  } catch(e){}
+}
+function finishSession(){
+  const a = S.ui.active;
+  const muscles = {};
+  a.entries.forEach(function(e){
+    if(e.sets.some(function(s){ return s.done; })) muscles[e.muscle] = true;
+  });
+  const list = Object.keys(muscles);
+  if(S.settings.autoreg && list.length) openFeedback(list);
+  else commitSession({});
+}
+function commitSession(fb){
+  const a = S.ui.active;
+  a.duration = Math.round((Date.now() - a.startedAt) / 60000);
+  a.feedback = fb;
+  a.updatedAt = Date.now();
+  a.entries = a.entries.map(function(e){
+    return { exId:e.exId, name:e.name, muscle:e.muscle, secondary:e.secondary,
+             range:e.range, sets:e.sets.filter(function(s){ return s.done; }) };
+  }).filter(function(e){ return e.sets.length > 0; });
+
+  if(a.entries.length){
+    S.sessions.unshift(a);
+    S.sessions.sort(function(x,y){ return x.date < y.date ? 1 : -1; });
+    dirtySessions.add(a.id);
+    applyFeedback(fb);
+    advanceCursor();
+  }
+  S.ui.active = null;
+  clearInterval(elapsedTimer); clearInterval(restTimer);
+  keepAwake(false);
+  save({config:true});
+  closeSheet();
+  render();
+  toast(a.entries.length ? 'Session logged · next up ' + curDay().name : 'Nothing logged');
+}
+
+/* ---------- 15. Sheets --------------------------------------------------- */
+
+function openSheet(html){
+  $('#layer').innerHTML = '<div class="sheet-bg" data-sheet-bg><div class="sheet">' + html + '</div></div>';
+}
+function closeSheet(){ $('#layer').innerHTML = ''; }
+
+const FB_SORE = ['Never got sore','Healed a while ago','Healed just now','Still sore'];
+const FB_PUMP = ['Low','Moderate','High'];
+const FB_PERF = ['Down','Same','Up'];
+let fbState = {};
+function openFeedback(muscles){
+  fbState = {};
+  muscles.forEach(function(m){ fbState[m] = { sore:1, pump:1, perf:1 }; });
+  drawFeedback(muscles);
+}
+function drawFeedback(muscles){
+  const groups = muscles.map(function(m){
+    const f = fbState[m];
+    return '<div class="fb-group"><div class="m">' + esc(m) + '</div>' +
+      fbQ(m, 'sore', 'Soreness', FB_SORE, f.sore) +
+      fbQ(m, 'pump', 'Pump', FB_PUMP, f.pump) +
+      fbQ(m, 'perf', 'Perf', FB_PERF, f.perf) + '</div>';
+  }).join('');
+  openSheet('<h2>How did that land?</h2>' +
+    '<p class="sub">Three taps per muscle. This is what decides whether next session adds sets, ' +
+    'holds, or backs off.</p>' + groups +
+    '<button class="btn btn-primary btn-lg" data-act="fb-save" style="margin-top:16px">Save session</button>' +
+    '<button class="btn btn-ghost btn-lg" data-act="fb-skip" style="margin-top:8px">Skip this</button>');
+}
+function fbQ(m, key, label, opts, val){
+  return '<div class="fb-q"><span class="lbl">' + label + '</span>' +
+    '<div class="fb-opts n' + opts.length + '">' + opts.map(function(o, i){
+      return '<button class="fb-opt" data-fb="' + m + '" data-k="' + key + '" data-v="' + i +
+        '" aria-pressed="' + (i === val) + '">' + o + '</button>';
+    }).join('') + '</div></div>';
+}
+function openExPicker(dayIdx){
+  const q = (S.ui.pickQ || '').toLowerCase();
+  const list = LIB.filter(function(e){
+    return !q || e.name.toLowerCase().indexOf(q) >= 0 || e.muscle.toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 40);
+  openSheet('<h2>Add an exercise</h2><p class="sub">It joins the end of the day at 3 sets — ' +
+    'reorder by removing and re-adding.</p>' +
+    '<input class="search" id="pickq" placeholder="Search movement or muscle" value="' +
+      esc(S.ui.pickQ || '') + '">' +
+    list.map(function(e){
+      return '<button class="pick" data-pick="' + esc(e.name) + '" data-d="' + dayIdx + '">' +
+        '<div class="nm">' + esc(e.name) + '</div><div class="mg">' + e.muscle +
+        (e.comp ? ' · compound' : ' · isolation') + '</div></button>';
+    }).join(''));
+  const inp = document.getElementById('pickq');
+  if(inp){
+    inp.addEventListener('input', function(){
+      S.ui.pickQ = inp.value;
+      const pos = inp.selectionStart;
+      openExPicker(dayIdx);
+      const n = document.getElementById('pickq');
+      if(n){ n.focus(); n.setSelectionRange(pos, pos); }
+    });
+  }
+}
+function openDayPicker(){
+  openSheet('<h2>Choose a day</h2><p class="sub">Jumping around does not change where you are ' +
+    'in the block — only which session you do next.</p>' +
+    S.program.days.map(function(d, i){
+      return '<button class="pick" data-day="' + i + '"><div class="nm">' + esc(d.name) +
+        '</div><div class="mg">' + esc(d.focus) + '</div></button>';
+    }).join(''));
+}
+
+/* ---------- 16. Events --------------------------------------------------- */
+
+document.addEventListener('click', function(ev){
+  const t = ev.target.closest('[data-act],[data-tab],[data-cat],[data-range],[data-open],[data-fb],[data-pick],[data-day],[data-sheet-bg]');
+  if(!t) return;
+
+  if(t.hasAttribute('data-sheet-bg')){
+    if(ev.target === t){ closeSheet(); }
+    return;
+  }
+  if(t.dataset.tab){ S.ui.tab = t.dataset.tab; save(); render(); return; }
+  if(t.dataset.cat){ S.ui.feedCat = t.dataset.cat; render(); return; }
+  if(t.dataset.range !== undefined){ S.ui.chartRange = +t.dataset.range; render(); return; }
+  if(t.dataset.open){
+    S.ui.open = S.ui.open || {};
+    S.ui.open[t.dataset.open] = !S.ui.open[t.dataset.open];
+    render(); return;
+  }
+  if(t.dataset.fb){
+    fbState[t.dataset.fb][t.dataset.k] = parseInt(t.dataset.v, 10);
+    drawFeedback(Object.keys(fbState)); return;
+  }
+  if(t.dataset.pick){
+    const d = S.program.days[parseInt(t.dataset.d, 10)];
+    d.exercises.push(mkEx(t.dataset.pick, 3));
+    S.ui.pickQ = '';
+    save({config:true}); closeSheet(); render();
+    toast(t.dataset.pick + ' added'); return;
+  }
+  if(t.dataset.day !== undefined && t.dataset.act === undefined){
+    S.meso.cursor.day = parseInt(t.dataset.day, 10);
+    save({config:true}); closeSheet(); render(); return;
+  }
+
+  const a = t.dataset.act;
+  const setRow = t.closest('.set-row');
+
+  switch(a){
+    case 'start': startSession(); window.scrollTo(0,0); break;
+    case 'quit':
+      if(confirm('Close without saving this session?')){
+        S.ui.active = null; clearInterval(elapsedTimer); clearInterval(restTimer);
+        keepAwake(false); save(); render();
+      }
+      break;
+    case 'finish': finishSession(); break;
+    case 'fb-save': commitSession(fbState); break;
+    case 'fb-skip': commitSession({}); break;
+    case 'skip': advanceCursor(); save({config:true}); render(); break;
+    case 'pickday': openDayPicker(); break;
+
+    case 'w-': case 'w+': {
+      const e = S.ui.active.entries[+setRow.dataset.ex];
+      const st = e.sets[+setRow.dataset.set];
+      const lib = LIB_BY_NAME[e.name];
+      const step = inc({load: lib ? lib.load : 'upper'});
+      st.w = Math.max(0, roundLoad(st.w + (a === 'w+' ? step : -step)));
+      refreshRow(setRow, st); save(); break;
+    }
+    case 'r-': case 'r+': {
+      const e = S.ui.active.entries[+setRow.dataset.ex];
+      const st = e.sets[+setRow.dataset.set];
+      st.reps = Math.max(0, st.reps + (a === 'r+' ? 1 : -1));
+      refreshRow(setRow, st); save(); break;
+    }
+    case 'log': {
+      const e = S.ui.active.entries[+setRow.dataset.ex];
+      const st = e.sets[+setRow.dataset.set];
+      st.done = !st.done;
+      setRow.classList.toggle('logged', st.done);
+      const card = document.getElementById('exc' + setRow.dataset.ex);
+      if(card) card.classList.toggle('done', e.sets.every(function(x){ return x.done; }));
+      if(st.done){
+        startRest(S.settings.rest);
+        if(navigator.vibrate) navigator.vibrate(18);
+        const tk = t.closest('.tick');
+        if(tk){ tk.classList.remove('just'); void tk.offsetWidth; tk.classList.add('just'); }
+        if(e.sets.every(function(x){ return x.done; })) scrollToNext(+setRow.dataset.ex);
+      }
+      updateSessHead(); save(); break;
+    }
+    case 'addset': {
+      const e = S.ui.active.entries[+t.dataset.ex];
+      const last = e.sets[e.sets.length - 1] || { w:e.target || 0, reps:e.range[1], rir:e.rir };
+      e.sets.push({ w:last.w, reps:last.reps, rir:last.rir, done:false });
+      redrawCard(+t.dataset.ex); save(); break;
+    }
+    case 'dropset': {
+      const e = S.ui.active.entries[+t.dataset.ex];
+      if(e.sets.length > 1) e.sets.pop();
+      redrawCard(+t.dataset.ex); save(); break;
+    }
+    case 'timer-toggle':
+      if(restTimer){ clearInterval(restTimer); restTimer = null;
+        document.getElementById('timerbar').classList.remove('live'); }
+      else startRest(restLeft > 0 ? restLeft : S.settings.rest);
+      break;
+    case 'timer-plus': restLeft += 30; restTotal = Math.max(restTotal, restLeft); paintRest(); break;
+
+    case 'sets-': case 'sets+': {
+      const e = S.program.days[+t.dataset.d].exercises[+t.dataset.e];
+      e.sets = clamp(e.sets + (a === 'sets+' ? 1 : -1), 1, 10);
+      save({config:true}); render(); break;
+    }
+    case 'rmex': {
+      const d = S.program.days[+t.dataset.d];
+      d.exercises.splice(+t.dataset.e, 1);
+      save({config:true}); render(); break;
+    }
+    case 'addex': openExPicker(+t.dataset.d); break;
+    case 'meso-back':
+      S.meso.cursor.day = Math.max(0, S.meso.cursor.day - 1);
+      save({config:true}); render(); break;
+    case 'meso-fwd': advanceCursor(); save({config:true}); render(); break;
+    case 'units': S.settings.units = t.dataset.v; save({config:true}); render(); break;
+    case 'autoreg': S.settings.autoreg = t.dataset.v === '1'; save({config:true}); render(); break;
+    case 'addbw': {
+      const el = document.getElementById('bwin');
+      const v = parseFloat(el && el.value);
+      if(!v){ toast('Enter a number first'); break; }
+      const d = new Date().toISOString().slice(0,10);
+      S.bodyweight = S.bodyweight.filter(function(x){ return x.date !== d; });
+      S.bodyweight.push({ date:d, kg:v });
+      save({config:true}); render(); toast('Logged ' + v + ' ' + U()); break;
+    }
+    case 'export': doExport(); break;
+    case 'import': doImport(); break;
+    case 'reset':
+      if(confirm('Erase all sessions, program edits and settings? This cannot be undone.')){
+        S = defaultState();
+        S.sessions = expandArchive();
+        dirtySessions.clear(); configDirty = true;
+        save({config:true}); render(); toast('Reset');
+      }
+      break;
+  }
+});
+
+document.addEventListener('change', function(ev){
+  const t = ev.target;
+  const a = t.dataset.act;
+  if(!a) return;
+  const setRow = t.closest('.set-row');
+  if(a === 'rir' && setRow){
+    S.ui.active.entries[+setRow.dataset.ex].sets[+setRow.dataset.set].rir = parseInt(t.value, 10);
+    save(); return;
+  }
+  if(a === 'w-set' && setRow){
+    const st = S.ui.active.entries[+setRow.dataset.ex].sets[+setRow.dataset.set];
+    st.w = Math.max(0, parseFloat(t.value) || 0); save(); return;
+  }
+  if(a === 'r-set' && setRow){
+    const st = S.ui.active.entries[+setRow.dataset.ex].sets[+setRow.dataset.set];
+    st.reps = Math.max(0, parseInt(t.value, 10) || 0); save(); return;
+  }
+  if(a === 'blockweeks'){
+    blocks()[+t.dataset.i].weeks = clamp(parseInt(t.value, 10) || 1, 1, 8);
+    if(S.meso.cursor.week > curBlock().weeks) S.meso.cursor.week = curBlock().weeks;
+    save({config:true}); render(); return;
+  }
+  if(a === 'incUpper' || a === 'incLower' || a === 'rest'){
+    S.settings[a] = Math.max(0.5, parseFloat(t.value) || S.settings[a]);
+    save({config:true}); return;
+  }
+  if(t.id === 'chartex'){ S.ui.chartEx = t.value; render(); }
+});
+document.addEventListener('input', function(ev){
+  if(ev.target.id === 'chartex'){ S.ui.chartEx = ev.target.value; render(); }
+});
+
+function refreshRow(row, st){
+  const ins = row.querySelectorAll('input.val');
+  if(ins[0]) ins[0].value = st.w;
+  if(ins[1]) ins[1].value = st.reps;
+}
+function redrawCard(i){
+  const card = document.getElementById('exc' + i);
+  if(!card) return;
+  const e = S.ui.active.entries[i];
+  card.innerHTML = exCardInner(e, i);
+  card.classList.toggle('done', e.sets.length > 0 && e.sets.every(function(x){ return x.done; }));
+  updateSessHead();
+}
+/** When an exercise is finished, bring the next unfinished one into view. */
+function scrollToNext(fromIdx){
+  const ents = S.ui.active.entries;
+  for(let i = fromIdx + 1; i < ents.length; i++){
+    if(ents[i].sets.some(function(x){ return !x.done; })){
+      const card = document.getElementById('exc' + i);
+      if(card) setTimeout(function(){
+        window.scrollTo({ top: card.getBoundingClientRect().top + window.scrollY - 132,
+                          behavior:'smooth' });
+      }, 420);
+      return;
+    }
+  }
+}
+function updateSessHead(){
+  const a = S.ui.active; if(!a) return;
+  const logged = a.entries.reduce(function(n, e){
+    return n + e.sets.filter(function(s){ return s.done; }).length; }, 0);
+  const total = a.entries.reduce(function(n, e){ return n + e.sets.length; }, 0);
+  const el = $('.sess-head .mono');
+  if(el) el.innerHTML = PHASE[a.phase].label + ' · wk ' + a.week + ' · ' + logged + '/' + total +
+    ' sets · <span id="elapsed">' + mmss((Date.now() - a.startedAt) / 1000) + '</span>';
+}
+
+/* ---------- 17. Export / import ------------------------------------------ */
+
+function doExport(){
+  const blob = JSON.stringify(S, null, 2);
+  navigator.clipboard && navigator.clipboard.writeText(blob).then(function(){
+    toast('Copied to clipboard');
+  }).catch(function(){ showBlob(blob); });
+  if(!navigator.clipboard) showBlob(blob);
+}
+function showBlob(blob){
+  openSheet('<h2>Your data</h2><p class="sub">Select all and copy. Paste it into Import to restore.</p>' +
+    '<textarea class="search" style="height:220px;font-family:var(--f-mono);font-size:11px" readonly>' +
+    esc(blob) + '</textarea>');
+}
+function doImport(){
+  openSheet('<h2>Import</h2><p class="sub">Paste a previously exported file. This replaces ' +
+    'everything currently stored.</p>' +
+    '<textarea class="search" id="impbox" style="height:200px;font-family:var(--f-mono);font-size:11px" ' +
+    'placeholder="Paste JSON here"></textarea>' +
+    '<button class="btn btn-primary btn-lg" id="impgo">Replace my data</button>');
+  document.getElementById('impgo').addEventListener('click', function(){
+    try {
+      const p = JSON.parse(document.getElementById('impbox').value);
+      if(!p || p.v !== 1) throw new Error('bad');
+      S = p; migrate();
+      S.sessions.forEach(function(s){ dirtySessions.add(s.id); });
+      configDirty = true;
+      save({config:true}); closeSheet(); render(); toast('Imported');
+    } catch(e){ toast('That does not look like an export file'); }
+  });
+}
+
+/* ---------- 18. Home-screen dressing ------------------------------------- */
+
+function dressForHomeScreen(){
+  // Skip entirely when the page already ships a real head (GitHub Pages build).
+  if(document.querySelector('link[rel="manifest"]')) return;
+  const add = function(name, content){
+    const m = document.createElement('meta');
+    m.setAttribute('name', name); m.setAttribute('content', content);
+    document.head.appendChild(m);
+  };
+  add('apple-mobile-web-app-capable', 'yes');
+  add('mobile-web-app-capable', 'yes');
+  add('apple-mobile-web-app-title', 'Iron Ledger');
+  add('apple-mobile-web-app-status-bar-style', 'black-translucent');
+  add('theme-color', '#0A0A0B');
+  const vp = document.querySelector('meta[name="viewport"]');
+  if(vp) vp.setAttribute('content',
+    'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1');
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">' +
+    '<rect width="180" height="180" rx="40" fill="#0A0A0B"/>' +
+    '<g stroke="#FFE23D" stroke-width="13" stroke-linecap="round">' +
+    '<path d="M42 90h96"/><path d="M42 66v48M138 66v48"/>' +
+    '<path d="M26 76v28M154 76v28"/></g></svg>';
+  const url = 'data:image/svg+xml;base64,' + btoa(svg);
+  const link = document.createElement('link');
+  link.rel = 'apple-touch-icon'; link.href = url;
+  document.head.appendChild(link);
+}
+
+/* ---------- 19. Boot ----------------------------------------------------- */
+
+load();
+dressForHomeScreen();
+render();
+initRemote();
+if(S.ui.active) startElapsed();
+window.addEventListener('beforeunload', function(){ try { pushRemote(); } catch(e){} });
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      reg.addEventListener('updatefound', function(){
+        const nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', function(){
+          if(nw.state === 'installed' && navigator.serviceWorker.controller){
+            try { toast('Update ready — close and reopen'); } catch(e){}
+          }
+        });
+      });
+    }).catch(function(){ /* offline install still works from cache */ });
+  });
+}
+</script>
+</body>
+</html>
