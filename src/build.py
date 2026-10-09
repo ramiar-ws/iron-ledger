@@ -50,13 +50,10 @@ if('serviceWorker' in navigator){
 </html>
 """
 
-import datetime, subprocess
-try:
-    sha = subprocess.run(['git','rev-parse','--short','HEAD'], cwd=root,
-                         capture_output=True, text=True).stdout.strip() or 'dev'
-except Exception:
-    sha = 'dev'
-stamp = datetime.datetime.now().strftime('%d %b %H:%M') + ' \u00b7 ' + sha
+import datetime
+# Time only: a commit sha stamped at build time always names the PARENT
+# commit, which is more confusing than helpful.
+stamp = datetime.datetime.now().strftime('%d %b %Y, %H:%M')
 body_bits = body_bits.replace('<script>\n"use strict";',
                               '<script>\n"use strict";\nconst BUILD_STAMP = "%s";' % stamp, 1)
 
