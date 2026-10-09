@@ -1,10 +1,11 @@
 /* Iron Ledger service worker.
    Stale-while-revalidate: the gym has no signal, so the cache always answers
    first and the network only refreshes it for next time. */
-const CACHE = 'iron-ledger-v1';
+const CACHE = 'iron-ledger-v2';
 const ASSETS = [
   './', './index.html', './manifest.webmanifest',
-  './icon-192.png', './icon-512.png', './icon-180.png', './icon-maskable-512.png'
+  './icon-192.png', './icon-512.png', './icon-180.png', './icon-maskable-512.png',
+  './fonts/OpenDyslexic-Regular.woff2', './fonts/OpenDyslexic-Bold.woff2'
 ];
 
 self.addEventListener('install', function(e){

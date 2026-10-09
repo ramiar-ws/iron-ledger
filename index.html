@@ -19,6 +19,19 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
+/* OpenDyslexic (SIL OFL 1.1) — see fonts/OFL.txt. Weighted bottoms and
+   wider spacing; some readers strongly prefer it. Off by default. */
+@font-face{
+  font-family:"OpenDyslexic";
+  src:url("fonts/OpenDyslexic-Regular.woff2") format("woff2");
+  font-weight:400 600;font-style:normal;font-display:swap;
+}
+@font-face{
+  font-family:"OpenDyslexic";
+  src:url("fonts/OpenDyslexic-Bold.woff2") format("woff2");
+  font-weight:700 900;font-style:normal;font-display:swap;
+}
+
 /* ============================================================
    TOKENS — light is the base; dark redefines tokens only.
    Neutrals carry a slight cyan bias toward the accent.
@@ -68,6 +81,22 @@
   --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme:dark;
 }
+
+/* OpenDyslexic runs large and wide for its point size, so ease the
+   tracking and tighten headline sizes to stop rows wrapping. */
+:root[data-font="dyslexic"]{
+  --f-display:"OpenDyslexic", "Archivo", ui-sans-serif, system-ui, sans-serif;
+}
+:root[data-font="dyslexic"] body{letter-spacing:-.01em}
+:root[data-font="dyslexic"] .topbar h1{font-size:23px}
+:root[data-font="dyslexic"] .today-hero h2{font-size:27px;letter-spacing:-.02em}
+:root[data-font="dyslexic"] .ex-head .nm{font-size:14px}
+:root[data-font="dyslexic"] .plan-row .nm{font-size:13px}
+:root[data-font="dyslexic"] .fcard h3{font-size:15px}
+:root[data-font="dyslexic"] .eyebrow,
+:root[data-font="dyslexic"] .sec-title,
+:root[data-font="dyslexic"] .pill,
+:root[data-font="dyslexic"] .tab{letter-spacing:.06em}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{
@@ -596,7 +625,7 @@ function defaultProgram(){
 function defaultState(){
   return {
     v:1,
-    settings:{ units:'kg', incUpper:2.5, incLower:5, rest:60, autoreg:true, theme:'dark' },
+    settings:{ units:'kg', incUpper:2.5, incLower:5, rest:60, autoreg:true, theme:'dark', dyslexic:false },
     meso:{
       blocks:[ {type:'strength',weeks:5}, {type:'deload',weeks:1},
                {type:'hypertrophy',weeks:6}, {type:'deload',weeks:1} ],
@@ -1278,7 +1307,12 @@ function render(){
   $('#tabs').style.display = S.ui.active ? 'none' : 'grid';
   document.body.classList.toggle('in-session', !!S.ui.active);
 }
-function applyTheme(){ document.documentElement.setAttribute('data-theme','dark'); }
+function applyTheme(){
+  const r = document.documentElement;
+  r.setAttribute('data-theme', 'dark');
+  if(S.settings.dyslexic) r.setAttribute('data-font', 'dyslexic');
+  else r.removeAttribute('data-font');
+}
 
 /* --- TODAY --- */
 function viewToday(){
@@ -1311,8 +1345,8 @@ function viewToday(){
     '<div class="plan-list">' + rows + '</div>' +
     '<button class="btn btn-primary btn-lg" data-act="start" style="margin-top:14px">Start ' +
       esc(day.name) + '</button>' +
-    '<div class="row" style="margin-top:10px;gap:8px">' +
-      '<button class="btn btn-ghost btn-sm" data-act="skip" style="flex:1">Skip to next day</button>' +
+    '<div class="row" style="margin-top:10px;gap:8px;align-items:stretch">' +
+      '<button class="btn btn-ghost btn-sm" data-act="skip" style="flex:1">Skip day</button>' +
       '<button class="btn btn-ghost btn-sm" data-act="pickday" style="flex:1">Pick a day</button>' +
     '</div>' +
   '</div>' +
@@ -1688,6 +1722,11 @@ function viewPlan(){
       '<div class="field"><div><div class="lbl">Default rest</div>' +
         '<div class="hint">Seconds. Starts the moment you log a set.</div></div>' +
         '<input type="number" step="15" min="30" value="' + st.rest + '" data-act="rest"></div>' +
+      '<div class="field"><div><div class="lbl">Dyslexia-friendly text</div>' +
+        '<div class="hint">Sets labels and headings in OpenDyslexic. Weights and reps ' +
+        'stay in the monospaced face so the columns keep lining up.</div></div>' +
+        '<div class="seg"><button data-act="dys" data-v="1" aria-pressed="' + (!!st.dyslexic) + '">On</button>' +
+        '<button data-act="dys" data-v="0" aria-pressed="' + (!st.dyslexic) + '">Off</button></div></div>' +
       '<div class="field"><div><div class="lbl">Autoregulate volume</div>' +
         '<div class="hint">Asks for pump, soreness and performance per muscle after each session, ' +
         'then adds or cuts sets next time.</div></div>' +
@@ -2034,6 +2073,7 @@ document.addEventListener('click', function(ev){
     case 'meso-fwd': advanceCursor(); save({config:true}); render(); break;
     case 'units': S.settings.units = t.dataset.v; save({config:true}); render(); break;
     case 'autoreg': S.settings.autoreg = t.dataset.v === '1'; save({config:true}); render(); break;
+    case 'dys': S.settings.dyslexic = t.dataset.v === '1'; save({config:true}); render(); break;
     case 'addbw': {
       const el = document.getElementById('bwin');
       const v = parseFloat(el && el.value);
